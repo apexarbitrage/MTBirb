@@ -9,15 +9,19 @@ trailhead - including a "fun drive" option that maximizes twisty mountain roads.
 
 ## Status
 
-Early scaffold. Trail data is currently OSM-derived/user-uploaded GPX only; eBird-based
-wildlife scoring exists as a first-pass proxy (see `app/services/wildlife_likelihood.py`).
-Strava, Trailforks, and AllTrails integrations, the curvature-based driving router, BirdNET
-sound ID, and Garmin export are not built yet - see `CLAUDE.md` for the full phasing.
+Early scaffold. The frontend implements the full hi-fi design - 9 screens (Discover, Birbs,
+Trails, Trips, You, plus Trail detail, Optimal time, Fun-drive nav, and Bird ID) - currently on
+static sample data; wiring it to the backend is the next step. On the backend, trail data is
+OSM-derived/user-uploaded GPX only; eBird-based wildlife scoring exists as a first-pass proxy
+(see `app/services/wildlife_likelihood.py`). Strava, Trailforks, and AllTrails integrations, the
+curvature-based driving router, BirdNET sound ID, and Garmin export are not built yet - see
+`CLAUDE.md` for the full phasing.
 
 ## Project layout
 
 - `backend/` - FastAPI + PostgreSQL/PostGIS API
-- `frontend/` - React + Vite, configured as an installable PWA
+- `frontend/` - React + Vite installable PWA; implements the design screens (`src/screens/`) on
+  sample data (`src/data/`). Drop licensed photos into `public/assets/`.
 
 ## Running locally
 

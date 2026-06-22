@@ -1,0 +1,88 @@
+.header {
+  padding: var(--screen-pad-top) var(--screen-pad-x) 12px;
+}
+
+.statRow {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.statTile {
+  flex: 1;
+  background: var(--white);
+  border-radius: var(--radius-tile);
+  padding: 13px 14px;
+  box-shadow: var(--shadow-card-sm);
+}
+
+.statNum {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.statLabel {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px var(--screen-pad-x) var(--content-pad-bottom);
+}
+
+.tripCard {
+  background: var(--white);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 14px 15px;
+  margin-bottom: 10px;
+}
+
+.tripTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.liferBadge {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--terracotta);
+  border-radius: var(--radius-pill);
+  padding: 3px 9px;
+}
+
+.tripMain {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.tripTrail {
+  font-size: 17px;
+  font-weight: 800;
+  flex: 1;
+}
+
+.birdChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 11px;
+}
+
+.birdChip {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sage-text-deep);
+  background: var(--sage-tint);
+  padding: 4px 9px;
+  border-radius: 7px;
+  white-space: nowrap;
+}

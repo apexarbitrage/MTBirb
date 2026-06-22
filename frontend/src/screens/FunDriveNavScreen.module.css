@@ -1,0 +1,213 @@
+.screen {
+  height: 100%;
+  position: relative;
+  background: #26302a;
+  overflow: hidden;
+  color: var(--ink);
+}
+
+.map {
+  position: absolute;
+  inset: 0;
+  background: #2f3a30;
+  background-image: repeating-linear-gradient(50deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 28px),
+    repeating-linear-gradient(140deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 30px),
+    radial-gradient(120% 70% at 70% 30%, rgba(138, 154, 91, 0.16), transparent 60%);
+}
+
+.routeSvg {
+  position: absolute;
+  inset: 0;
+}
+
+.pin {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.pinDot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--forest);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+
+.pinTail {
+  width: 8px;
+  height: 8px;
+  background: var(--forest);
+  transform: rotate(45deg);
+  margin-top: -4px;
+  border-right: 2px solid #fff;
+  border-bottom: 2px solid #fff;
+}
+
+.youDot {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 4px solid var(--terracotta);
+  box-shadow: 0 0 0 5px rgba(194, 112, 61, 0.22), 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.topRow {
+  position: absolute;
+  top: 54px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.routePanel {
+  flex: 1;
+  min-width: 0;
+  background: rgba(45, 59, 45, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 18px;
+  padding: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.routeLabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--sage-on-dark);
+  margin-bottom: 10px;
+}
+
+.routeOptions {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.routeOpt {
+  flex: none;
+  padding: 10px 14px;
+  border-radius: 12px;
+  min-width: 96px;
+  text-align: left;
+}
+
+.routeOptActive {
+  background: var(--terracotta);
+  color: #fff;
+}
+
+.routeOptIdle {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-on-forest-soft);
+}
+
+.routeOptName {
+  font-size: 14px;
+  font-weight: 700;
+}
+.routeOptNameActive {
+  font-weight: 800;
+}
+
+.routeOptSub {
+  font-size: 10px;
+  opacity: 0.75;
+  font-family: var(--font-mono);
+}
+
+.bottomCard {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--sand);
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.25);
+  padding: 16px 20px calc(30px + env(safe-area-inset-bottom, 0px));
+}
+
+.etaRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.eta {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--forest-deep);
+  letter-spacing: -0.4px;
+}
+
+.etaSub {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.extraNum {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--terracotta);
+}
+
+.extraLabel {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.twistCard {
+  margin-top: 14px;
+  background: var(--white);
+  border-radius: var(--radius-tile);
+  padding: 13px;
+}
+
+.twistTop {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 7px;
+}
+
+.twistBars {
+  display: flex;
+  gap: 3px;
+}
+
+.twistSeg {
+  flex: 1;
+  height: 7px;
+  border-radius: 3px;
+}
+
+.twistNote {
+  font-size: 11px;
+  color: var(--text-placeholder);
+  margin-top: 8px;
+  font-family: var(--font-mono);
+}
+
+.startBtn {
+  margin-top: 12px;
+  width: 100%;
+  height: 52px;
+  border-radius: var(--radius-card);
+  background: var(--forest);
+  color: var(--sand);
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.startBtn:active {
+  background: var(--forest-button-active);
+}

@@ -1,0 +1,37 @@
+.nav {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: var(--nav-height);
+  padding: 10px 26px calc(26px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, var(--sand) 62%, rgba(244, 241, 234, 0));
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  z-index: 5;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  transition: opacity 0.12s ease;
+}
+
+.item:active {
+  opacity: 0.6;
+}
+
+.label {
+  font-size: 10px;
+  color: var(--nav-inactive-label);
+}
+
+.labelActive {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--nav-active);
+}

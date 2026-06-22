@@ -1,21 +1,31 @@
-import { useEffect, useState } from "react";
-
-type ApiStatus = "checking" | "ok" | "unreachable";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { DiscoverScreen } from "./screens/DiscoverScreen";
+import { TargetingScreen } from "./screens/TargetingScreen";
+import { TrailsScreen } from "./screens/TrailsScreen";
+import { TripsScreen } from "./screens/TripsScreen";
+import { YouScreen } from "./screens/YouScreen";
+import { TrailDetailScreen } from "./screens/TrailDetailScreen";
+import { OptimalTimeScreen } from "./screens/OptimalTimeScreen";
+import { FunDriveNavScreen } from "./screens/FunDriveNavScreen";
+import { BirdIdScreen } from "./screens/BirdIdScreen";
 
 export function App() {
-  const [apiStatus, setApiStatus] = useState<ApiStatus>("checking");
-
-  useEffect(() => {
-    fetch("/api/health")
-      .then((res) => (res.ok ? setApiStatus("ok") : setApiStatus("unreachable")))
-      .catch(() => setApiStatus("unreachable"));
-  }, []);
-
   return (
-    <main>
-      <h1>MTBirb</h1>
-      <p>Trails worth riding, and worth watching.</p>
-      <p>API status: {apiStatus}</p>
-    </main>
+    <div className="app-shell">
+      <Routes>
+        {/* Core tabs */}
+        <Route path="/" element={<DiscoverScreen />} />
+        <Route path="/birbs" element={<TargetingScreen />} />
+        <Route path="/trails" element={<TrailsScreen />} />
+        <Route path="/trips" element={<TripsScreen />} />
+        <Route path="/you" element={<YouScreen />} />
+        {/* Flow screens */}
+        <Route path="/trail" element={<TrailDetailScreen />} />
+        <Route path="/optimal-time" element={<OptimalTimeScreen />} />
+        <Route path="/navigate" element={<FunDriveNavScreen />} />
+        <Route path="/bird-id" element={<BirdIdScreen />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
   );
 }

@@ -1,0 +1,110 @@
+.profileRow {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.name {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.4px;
+}
+
+.sub {
+  font-size: 12px;
+  color: var(--sage);
+  font-family: var(--font-mono);
+}
+
+.statGroup {
+  display: flex;
+  gap: 1px;
+  margin-top: 18px;
+  background: var(--card-tile-divider);
+  border-radius: var(--radius-tile);
+  overflow: hidden;
+}
+
+.statTile {
+  flex: 1;
+  background: var(--white);
+  padding: 12px 6px;
+  text-align: center;
+}
+
+.statNum {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.statLabel {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.savedRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px;
+}
+.savedRow:not(:last-child) {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.savedName {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.wishlist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wishPill {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--tan-accent);
+  background: var(--white);
+  border: 1px dashed rgba(138, 109, 79, 0.4);
+  padding: 7px 12px;
+  border-radius: var(--radius-pill);
+}
+
+.connRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+}
+.connRow:not(:last-child) {
+  border-bottom: 1px solid var(--hairline);
+}
+
+.connBadge {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  flex: none;
+}
+
+.connName {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.connStatus {
+  font-size: 12px;
+  color: var(--success);
+  font-weight: 600;
+}

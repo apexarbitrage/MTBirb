@@ -66,6 +66,31 @@ backend over HTTP, proxied under `/api` in dev (see `frontend/vite.config.ts`).
   Currently just `wildlife_likelihood.py`.
 - `app/routers/` - FastAPI route modules, included in `app/main.py`.
 
+### Frontend structure
+
+The PWA implements the hi-fi design (9 screens: 5 core tabs - Discover, Birbs/Targeting, Trails,
+Trips, You - plus 4 flow screens - Trail detail, Optimal time, Fun-drive nav, Bird ID). It runs
+on **static sample data**, not the backend yet (see `src/data/trails.ts` - the same 4 trails / 4
+species / 4 trips as the design prototype). Wiring screens to the FastAPI API is a deliberate next
+step, not an oversight.
+
+- `src/screens/` - one component + co-located CSS Module per screen, routed in `src/App.tsx`
+  (React Router). Flow screens have no bottom nav and use `BackButton`.
+- `src/components/` - shared UI: `BottomNav`, `DifficultyMarker`, `ScoreRing`, `Photo`
+  (the design's `image-slot` → a real `<img>` with a palette fallback), `icons.tsx` (all custom
+  inline-SVG icons), `BirdIdFab`, `BackButton`.
+- `src/state/AppState.tsx` - React Context holding cross-screen state (Discover hero/sort, Trails
+  sort/dir, the Targeting→Trails species filter, the Trail-detail subject). Screen-local UI state
+  stays in the screens.
+- `src/data/trails.ts` - sample data + the ported sort/format/score helpers.
+- `src/styles/tokens.css` - all design tokens as CSS custom properties; use these, don't hard-code
+  hex. `common.module.css` holds shared visual atoms (eyebrow, title, card, score chips).
+- Photos go in `public/assets/` (see its README for the exact filenames); slots show a tasteful
+  placeholder until real licensed photos are dropped in.
+- Two in-app entry points aren't in the static design (which scrolled between frames): the Bird ID
+  floating button (`BirdIdFab`, on Discover + Trail detail) and Optimal time (tap the Discover hero
+  window, or a Trail-detail stat tile).
+
 ### The wildlife-likelihood model is the product's core differentiator, and is intentionally unfinished
 
 `app/services/wildlife_likelihood.py` buffers a trail's geometry and counts nearby cached

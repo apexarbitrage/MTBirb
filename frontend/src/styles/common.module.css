@@ -1,0 +1,77 @@
+/* Reusable visual atoms shared across screens (import per-screen as needed). */
+
+.screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--sand);
+  color: var(--ink);
+}
+
+.scrollArea {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--screen-pad-top) var(--screen-pad-x) var(--content-pad-bottom);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--sage);
+}
+
+.title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+  margin-top: 2px;
+}
+
+.card {
+  background: var(--white);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+
+.monoMeta {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.sectionLabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--sage);
+  margin: 22px 0 10px;
+}
+
+.pressable {
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+
+.pressable:active {
+  opacity: 0.7;
+}
+
+.scoreChipHi,
+.scoreChipMed {
+  font-size: 15px;
+  font-weight: 800;
+  border-radius: var(--radius-tag);
+  padding: 4px 9px;
+}
+
+.scoreChipHi {
+  color: var(--terracotta);
+  background: var(--terracotta-tint);
+}
+
+.scoreChipMed {
+  color: var(--sage-text);
+  background: var(--sage-tint-strong);
+}

@@ -1,0 +1,129 @@
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--screen-pad-top) var(--screen-pad-x) 110px;
+}
+
+.bigTitle {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.6px;
+}
+
+.subtitle {
+  font-size: 14px;
+  color: var(--text-muted-2);
+  margin-top: 6px;
+}
+
+.segmented {
+  display: flex;
+  gap: 6px;
+  margin-top: 18px;
+  background: #e7e3d8;
+  padding: 4px;
+  border-radius: var(--radius-tile);
+}
+
+.segment {
+  flex: 1;
+  text-align: center;
+  padding: 9px 4px;
+  border-radius: 10px;
+  color: var(--text-muted-2);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.segmentActive {
+  background: var(--forest);
+  color: #fff;
+  font-weight: 700;
+}
+
+.search {
+  margin-top: 14px;
+  height: 44px;
+  border-radius: var(--radius-tile);
+  background: var(--white);
+  box-shadow: var(--shadow-card-sm);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px;
+}
+
+.searchPlaceholder {
+  color: var(--text-placeholder);
+  font-size: 15px;
+}
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  border-radius: var(--radius-card);
+  padding: 12px 14px;
+  width: 100%;
+  text-align: left;
+}
+.card:active {
+  opacity: 0.85;
+}
+
+.cardIdle {
+  background: var(--white);
+  box-shadow: 0 1px 4px rgba(33, 48, 42, 0.05);
+}
+
+.cardActive {
+  background: var(--forest);
+}
+
+.spName {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.spSub {
+  font-size: 12px;
+  font-family: var(--font-mono);
+}
+
+.like {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.applyBar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 14px var(--screen-pad-x) calc(30px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, var(--sand) 70%, rgba(244, 241, 234, 0));
+}
+
+.applyBtn {
+  width: 100%;
+  height: 52px;
+  border-radius: var(--radius-card);
+  background: var(--terracotta);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-button);
+}
+.applyBtn:active {
+  background: var(--terracotta-pressed);
+}
