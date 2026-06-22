@@ -2,7 +2,7 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--screen-pad-top) var(--screen-pad-x) 110px;
+  padding: var(--screen-pad-top) var(--screen-pad-x) calc(var(--nav-height) + 110px);
 }
 
 .bigTitle {
@@ -106,8 +106,8 @@
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
-  padding: 14px var(--screen-pad-x) calc(30px + env(safe-area-inset-bottom, 0px));
+  bottom: var(--nav-height);
+  padding: 14px var(--screen-pad-x) 14px;
   background: linear-gradient(to top, var(--sand) 70%, rgba(244, 241, 234, 0));
 }
 

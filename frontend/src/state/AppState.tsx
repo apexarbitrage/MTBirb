@@ -59,16 +59,15 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         ),
       trailSort,
       trailDir,
-      pickTrailSort: (key) =>
+      pickTrailSort: (key) => {
         // Re-tap active criterion → invert direction; new criterion → reset to default.
-        setTrailSort((prev) => {
-          if (prev === key) {
-            setTrailDir((d) => (d === "asc" ? "desc" : "asc"));
-            return prev;
-          }
+        if (trailSort === key) {
+          setTrailDir(trailDir === "asc" ? "desc" : "asc");
+        } else {
+          setTrailSort(key);
           setTrailDir(TRAIL_SORT_DEFAULT_DIR[key]);
-          return key;
-        }),
+        }
+      },
       trailFilter,
       setTrailFilter,
       targetSpecies,

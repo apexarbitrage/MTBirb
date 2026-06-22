@@ -9,6 +9,7 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -53,7 +54,7 @@ a {
  * screens (mirrors the prototype's device frame without porting it).
  */
 .app-shell {
-  height: 100dvh;
+  height: 100%;
   width: 100%;
   max-width: var(--app-max-width);
   margin: 0 auto;
@@ -71,7 +72,7 @@ a {
     justify-content: center;
   }
   .app-shell {
-    height: min(900px, 100dvh);
+    height: min(900px, 100%);
     border-radius: 28px;
     box-shadow: 0 24px 60px rgba(33, 48, 42, 0.28);
   }

@@ -1,4 +1,5 @@
 .header {
+  min-width: 0;
   padding: var(--screen-pad-top) var(--screen-pad-x) 10px;
 }
 
