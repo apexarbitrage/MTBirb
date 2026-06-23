@@ -3,7 +3,9 @@ import { BackButton } from "../components/BackButton";
 import { BirdIdFab } from "../components/BirdIdFab";
 import { ScoreRing } from "../components/ScoreRing";
 import { Photo } from "../components/Photo";
-import { TRAIL_HERO_IMG, fmtTime, trailById } from "../data/trails";
+import { CenterMessage } from "../components/CenterMessage";
+import { useTrails } from "../data/TrailsProvider";
+import { TRAIL_HERO_IMG, fmtTime } from "../data/trails";
 import { useAppState } from "../state/AppState";
 import s from "./TrailDetailScreen.module.css";
 
@@ -22,8 +24,27 @@ function elevationPaths(elev: number[]) {
 
 export function TrailDetailScreen() {
   const navigate = useNavigate();
+  const { byId, loading, error, reload } = useTrails();
   const { detailTrailId, setDetailTrailId } = useAppState();
-  const t = trailById(detailTrailId);
+  const t = byId(detailTrailId);
+
+  if (loading || error || !t) {
+    return (
+      <div className={s.screen}>
+        <div style={{ position: "absolute", top: 16, left: 16, zIndex: 2 }}>
+          <BackButton bg="rgba(45,59,45,0.1)" stroke="var(--forest)" blur={false} />
+        </div>
+        {loading ? (
+          <CenterMessage title="Loading trail…" />
+        ) : error ? (
+          <CenterMessage title="Couldn't load trail" detail={error} onRetry={reload} />
+        ) : (
+          <CenterMessage title="Trail not found" detail="This trail isn't available." />
+        )}
+      </div>
+    );
+  }
+
   const { polyline, area } = elevationPaths(t.elevation);
 
   return (

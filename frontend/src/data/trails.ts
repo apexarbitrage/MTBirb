@@ -1,14 +1,14 @@
 /*
- * Static sample data for the MTBirb prototype.
+ * Trail types, helpers, and the remaining static sample data for MTBirb.
  *
- * Mirrors the data in the design handoff's `renderVals()` (4 trails, 4 species,
- * 4 trips), extended with per-trail detail fields (elevation, climb/descent,
- * sighting factors) so every trail has a coherent Trail Detail screen rather
- * than reusing Raptor Ridge's numbers everywhere.
+ * Trails are now served by the backend (`GET /api/trails`, loaded via TrailsProvider) - the
+ * former static `TRAILS` array moved into the database seed (backend/app/seed.py). Species
+ * and trips are still static samples here: they depend on integrations not yet wired (eBird
+ * for species likelihood, a rides store for trips) and light up in a later pass.
  *
- * In production this is replaced by: trails from a trails source (e.g.
- * Trailforks), wildlife probability from eBird calibrated by search effort /
- * seasonality / time of day / weather, weather from a forecast API.
+ * In production the trail wildlife/weather fields come from eBird (calibrated by search
+ * effort / seasonality / time of day / weather) and a forecast API; today they are seeded
+ * placeholders served under each trail's `derived` overlay.
  */
 
 export type Difficulty = "Easy" | "Intermediate" | "Advanced";
@@ -53,149 +53,6 @@ export interface Trail {
   bestWindow: string;
   bestWindowWhy: string;
 }
-
-export const TRAILS: Trail[] = [
-  {
-    id: "raptor",
-    name: "Raptor Ridge",
-    score: 94,
-    diff: "Advanced",
-    miles: 8.4,
-    effort: 8.7,
-    window: "6:10–8:30 AM · best light & activity",
-    realfeel: "54°",
-    sky: "Clear",
-    condition: "Tacky",
-    peak: "Northern Goshawk, Pileated Woodpecker",
-    metaTime: "AM",
-    metaBird: "Goshawk",
-    features: ["Rock garden", "Drops", "Tech climb"],
-    rideTime: 65,
-    likelyBirds: ["Northern Goshawk", "Pileated Woodpecker", "Sooty Grouse"],
-    location: "Galbraith Mtn · Bellingham, WA",
-    gainFt: 2050,
-    dirt: "Tacky",
-    climbFt: 2050,
-    descentFt: 2180,
-    avgUpGrade: "9.2%",
-    avgDownGrade: "7.8%",
-    elevation: [0.1, 0.22, 0.38, 0.48, 0.66, 0.8, 0.58, 0.44, 0.3, 0.2, 0.13],
-    sightingHeadline: "94% chance of a notable encounter this morning",
-    factors: [
-      { label: "Seasonality", value: "Peak", pct: 90, tone: "terracotta" },
-      { label: "Time of day", value: "Dawn — ideal", pct: 96, tone: "terracotta" },
-      { label: "Weather match", value: "Calm, clear", pct: 84, tone: "sage" },
-      { label: "Recent reports (14d)", value: "23 checklists", pct: 72, tone: "sage" },
-    ],
-    bestWindow: "6:10 – 8:30 AM",
-    bestWindowWhy: "Dry dirt, calm wind, and peak wildlife activity overlap.",
-  },
-  {
-    id: "owl",
-    name: "Owl Hollow",
-    score: 91,
-    diff: "Intermediate",
-    miles: 5.5,
-    effort: 6.1,
-    window: "Dusk · 7:40–8:50 PM · peak owl calls",
-    realfeel: "58°",
-    sky: "Clear",
-    condition: "Tacky",
-    peak: "Northern Pygmy-Owl",
-    metaTime: "dusk",
-    metaBird: "Pygmy-Owl",
-    features: ["Jumps", "Berms", "Flow"],
-    rideTime: 48,
-    likelyBirds: ["Northern Pygmy-Owl", "Varied Thrush", "Pacific Wren"],
-    location: "Lake Padden · Bellingham, WA",
-    gainFt: 1180,
-    dirt: "Tacky",
-    climbFt: 1180,
-    descentFt: 1210,
-    avgUpGrade: "6.4%",
-    avgDownGrade: "6.0%",
-    elevation: [0.15, 0.28, 0.4, 0.52, 0.46, 0.6, 0.7, 0.55, 0.4, 0.28, 0.18],
-    sightingHeadline: "91% chance of a notable encounter at dusk",
-    factors: [
-      { label: "Seasonality", value: "Peak", pct: 88, tone: "terracotta" },
-      { label: "Time of day", value: "Dusk — ideal", pct: 92, tone: "terracotta" },
-      { label: "Weather match", value: "Calm, clear", pct: 80, tone: "sage" },
-      { label: "Recent reports (14d)", value: "18 checklists", pct: 64, tone: "sage" },
-    ],
-    bestWindow: "7:40 – 8:50 PM",
-    bestWindowWhy: "Cooling air and peak owl calls overlap at dusk.",
-  },
-  {
-    id: "cedar",
-    name: "Cedar Dust",
-    score: 88,
-    diff: "Intermediate",
-    miles: 6.2,
-    effort: 6.8,
-    window: "Morning · 6:30–9:00 AM · cool & calm",
-    realfeel: "52°",
-    sky: "Part cloud",
-    condition: "Tacky",
-    peak: "Pileated Woodpecker",
-    metaTime: "AM",
-    metaBird: "Pileated Woodpecker",
-    features: ["Flow", "Roots"],
-    rideTime: 52,
-    likelyBirds: ["Pileated Woodpecker", "Red Crossbill", "Gray Jay"],
-    location: "Stewart Mtn · Bellingham, WA",
-    gainFt: 1420,
-    dirt: "Tacky",
-    climbFt: 1420,
-    descentFt: 1450,
-    avgUpGrade: "7.1%",
-    avgDownGrade: "6.6%",
-    elevation: [0.12, 0.3, 0.42, 0.5, 0.62, 0.72, 0.6, 0.48, 0.36, 0.24, 0.16],
-    sightingHeadline: "88% chance of a notable encounter this morning",
-    factors: [
-      { label: "Seasonality", value: "High", pct: 82, tone: "terracotta" },
-      { label: "Time of day", value: "Morning — good", pct: 86, tone: "terracotta" },
-      { label: "Weather match", value: "Cool, calm", pct: 78, tone: "sage" },
-      { label: "Recent reports (14d)", value: "15 checklists", pct: 58, tone: "sage" },
-    ],
-    bestWindow: "6:30 – 9:00 AM",
-    bestWindowWhy: "Cool, calm morning with low traffic and good light.",
-  },
-  {
-    id: "marsh",
-    name: "Marsh Loop",
-    score: 76,
-    diff: "Easy",
-    miles: 3.1,
-    effort: 3.4,
-    window: "Midday · 11 AM–1 PM · wetland activity",
-    realfeel: "63°",
-    sky: "Clear",
-    condition: "Dry",
-    peak: "Great Blue Heron",
-    metaTime: "midday",
-    metaBird: "Heron",
-    features: ["Boardwalk", "Flowy"],
-    rideTime: 26,
-    likelyBirds: ["Great Blue Heron", "Green Heron", "Belted Kingfisher"],
-    location: "Tennant Lake · Ferndale, WA",
-    gainFt: 240,
-    dirt: "Dry",
-    climbFt: 240,
-    descentFt: 240,
-    avgUpGrade: "2.1%",
-    avgDownGrade: "2.0%",
-    elevation: [0.4, 0.46, 0.42, 0.5, 0.45, 0.52, 0.48, 0.54, 0.46, 0.5, 0.44],
-    sightingHeadline: "76% chance of a wildlife encounter midday",
-    factors: [
-      { label: "Seasonality", value: "Moderate", pct: 70, tone: "terracotta" },
-      { label: "Time of day", value: "Midday — fair", pct: 64, tone: "sage" },
-      { label: "Weather match", value: "Warm, clear", pct: 72, tone: "sage" },
-      { label: "Recent reports (14d)", value: "31 checklists", pct: 80, tone: "terracotta" },
-    ],
-    bestWindow: "11:00 AM – 1:00 PM",
-    bestWindowWhy: "Midday wetland activity with warm, clear skies.",
-  },
-];
 
 export interface Trip {
   date: string;
@@ -319,10 +176,6 @@ export function fmtTime(min: number): string {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return h ? `${h}:${String(m).padStart(2, "0")}` : `${m} min`;
-}
-
-export function trailById(id: string): Trail {
-  return TRAILS.find((t) => t.id === id) ?? TRAILS[0];
 }
 
 export function speciesByName(name: string | null): Species | null {

@@ -1,5 +1,6 @@
 import { BackButton } from "../components/BackButton";
-import { trailById } from "../data/trails";
+import { CenterMessage } from "../components/CenterMessage";
+import { useTrails } from "../data/TrailsProvider";
 import { useAppState } from "../state/AppState";
 import common from "../styles/common.module.css";
 import s from "./OptimalTimeScreen.module.css";
@@ -40,8 +41,26 @@ function conditionsColor(pct: number): string {
 }
 
 export function OptimalTimeScreen() {
+  const { byId, loading, error, reload } = useTrails();
   const { detailTrailId } = useAppState();
-  const t = trailById(detailTrailId);
+  const t = byId(detailTrailId);
+
+  if (loading || error || !t) {
+    return (
+      <div className={common.screen}>
+        <div style={{ position: "absolute", top: 16, left: 16, zIndex: 2 }}>
+          <BackButton bg="rgba(45,59,45,0.1)" stroke="var(--forest)" blur={false} />
+        </div>
+        {loading ? (
+          <CenterMessage title="Loading…" />
+        ) : error ? (
+          <CenterMessage title="Couldn't load trail" detail={error} onRetry={reload} />
+        ) : (
+          <CenterMessage title="Trail not found" detail="This trail isn't available." />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className={common.screen}>

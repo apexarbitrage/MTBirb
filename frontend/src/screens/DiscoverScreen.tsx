@@ -5,13 +5,9 @@ import { DifficultyMarker } from "../components/DifficultyMarker";
 import { ScoreRing } from "../components/ScoreRing";
 import { Photo } from "../components/Photo";
 import { BirdGlyph } from "../components/icons";
-import {
-  TRAILS,
-  TRAIL_HERO_IMG,
-  scoreColor,
-  scoreChipBg,
-  trailById,
-} from "../data/trails";
+import { CenterMessage } from "../components/CenterMessage";
+import { useTrails } from "../data/TrailsProvider";
+import { TRAIL_HERO_IMG, scoreColor, scoreChipBg } from "../data/trails";
 import { useAppState } from "../state/AppState";
 import common from "../styles/common.module.css";
 import s from "./DiscoverScreen.module.css";
@@ -24,6 +20,7 @@ const SORT_LABELS: Record<string, string> = {
 
 export function DiscoverScreen() {
   const navigate = useNavigate();
+  const { trails, byId, loading, error, reload } = useTrails();
   const {
     discoverSelectedId,
     setDiscoverSelectedId,
@@ -32,9 +29,24 @@ export function DiscoverScreen() {
     setDetailTrailId,
   } = useAppState();
 
-  const sel = trailById(discoverSelectedId);
+  if (loading || error || trails.length === 0) {
+    return (
+      <div className={common.screen}>
+        {loading ? (
+          <CenterMessage title="Loading trails…" />
+        ) : error ? (
+          <CenterMessage title="Couldn't load trails" detail={error} onRetry={reload} />
+        ) : (
+          <CenterMessage title="No trails nearby yet" />
+        )}
+        <BottomNav active="discover" />
+      </div>
+    );
+  }
 
-  const rest = TRAILS.filter((t) => t.id !== sel.id).sort((a, b) =>
+  const sel = byId(discoverSelectedId) ?? trails[0];
+
+  const rest = trails.filter((t) => t.id !== sel.id).sort((a, b) =>
     discoverSort === "distance"
       ? a.miles - b.miles
       : discoverSort === "effort"

@@ -1,9 +1,10 @@
 import { useNavigate } from "react-router-dom";
 import { BottomNav } from "../components/BottomNav";
+import { CenterMessage } from "../components/CenterMessage";
 import { DifficultyMarker } from "../components/DifficultyMarker";
 import { BirdGlyph } from "../components/icons";
+import { useTrails } from "../data/TrailsProvider";
 import {
-  TRAILS,
   TRAIL_SORT_CHIPS,
   TRAIL_SORT_LABELS,
   TOTAL_TRAILS_NEARBY,
@@ -19,12 +20,26 @@ import s from "./TrailsScreen.module.css";
 
 export function TrailsScreen() {
   const navigate = useNavigate();
+  const { trails, loading, error, reload } = useTrails();
   const { trailSort, trailDir, pickTrailSort, trailFilter, setTrailFilter, setDetailTrailId } =
     useAppState();
 
   const filterEntry = speciesByName(trailFilter);
 
-  const sorted = [...TRAILS].sort((a, b) => {
+  if (loading || error) {
+    return (
+      <div className={common.screen}>
+        {loading ? (
+          <CenterMessage title="Loading trails…" />
+        ) : (
+          <CenterMessage title="Couldn't load trails" detail={error ?? undefined} onRetry={reload} />
+        )}
+        <BottomNav active="trails" />
+      </div>
+    );
+  }
+
+  const sorted = [...trails].sort((a, b) => {
     const c = compareTrails(a, b, trailSort);
     return trailDir === "asc" ? c : -c;
   });
