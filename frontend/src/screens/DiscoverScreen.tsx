@@ -7,6 +7,7 @@ import { Photo } from "../components/Photo";
 import { BirdGlyph } from "../components/icons";
 import { CenterMessage } from "../components/CenterMessage";
 import { useTrails } from "../data/TrailsProvider";
+import { useTrailWeather, shortSky } from "../data/useTrailWeather";
 import { TRAIL_HERO_IMG, scoreColor, scoreChipBg } from "../data/trails";
 import { useAppState } from "../state/AppState";
 import common from "../styles/common.module.css";
@@ -28,6 +29,10 @@ export function DiscoverScreen() {
     cycleDiscoverSort,
     setDetailTrailId,
   } = useAppState();
+
+  // Live forecast for the currently-selected hero trail (falls back to seeded values).
+  const selSlug = byId(discoverSelectedId)?.id ?? trails[0]?.id;
+  const { current: wx } = useTrailWeather(selSlug);
 
   if (loading || error || trails.length === 0) {
     return (
@@ -122,11 +127,11 @@ export function DiscoverScreen() {
               </div>
             </div>
             <div className={s.weatherCell}>
-              <div className={s.weatherValue}>{sel.realfeel}</div>
-              <div className={s.weatherLabel}>REALFEEL</div>
+              <div className={s.weatherValue}>{wx ? `${wx.temperature}°` : sel.realfeel}</div>
+              <div className={s.weatherLabel}>{wx ? "TEMP" : "REALFEEL"}</div>
             </div>
             <div className={s.weatherCell}>
-              <div className={s.weatherValue}>{sel.sky}</div>
+              <div className={s.weatherValue}>{wx ? shortSky(wx.shortForecast) : sel.sky}</div>
               <div className={s.weatherLabel}>SKY</div>
             </div>
             <div className={s.weatherCell}>

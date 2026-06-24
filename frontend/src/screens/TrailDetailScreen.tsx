@@ -178,7 +178,7 @@ export function TrailDetailScreen() {
             <div className={s.probHead}>
               <div className={s.probTitle}>Sighting probability</div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--terracotta)" }}>
-                eBird-calibrated
+                Preview · sample
               </div>
             </div>
             <div className={s.probHeadline}>{t.sightingHeadline}</div>
