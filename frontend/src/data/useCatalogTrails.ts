@@ -38,6 +38,8 @@ export interface CatalogTrail {
   peak: string | null;
   sightingHeadline: string | null;
   factors: SightingFactor[];
+  // Set only when the list is fetched with a species filter: that species' odds near this trail.
+  speciesLikelihood: number | null;
 }
 
 /** Adapt a live catalog trail into the shared `Trail` shape the screens render. */

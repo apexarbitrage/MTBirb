@@ -4,14 +4,15 @@ import { CenterMessage } from "../components/CenterMessage";
 import { DifficultyMarker } from "../components/DifficultyMarker";
 import { BirdGlyph } from "../components/icons";
 import { useTrails } from "../data/TrailsProvider";
+import { useSpeciesTrails } from "../data/useSpeciesTrails";
 import {
   TRAIL_SORT_CHIPS,
   TRAIL_SORT_LABELS,
   compareTrails,
   fmtTime,
+  normalizeDifficulty,
   scoreChipBg,
   scoreColor,
-  speciesByName,
 } from "../data/trails";
 import { useAppState } from "../state/AppState";
 import common from "../styles/common.module.css";
@@ -20,10 +21,14 @@ import s from "./TrailsScreen.module.css";
 export function TrailsScreen() {
   const navigate = useNavigate();
   const { trails, location, loading, error, reload } = useTrails();
-  const { trailSort, trailDir, pickTrailSort, trailFilter, setTrailFilter, setDetailTrailId } =
+  const { trailSort, trailDir, pickTrailSort, speciesFilter, setSpeciesFilter, setDetailTrailId } =
     useAppState();
+  const speciesView = useSpeciesTrails(speciesFilter?.code ?? null, location.lat, location.lon);
 
-  const filterEntry = speciesByName(trailFilter);
+  const open = (id: string) => {
+    setDetailTrailId(id);
+    navigate("/trail");
+  };
 
   if (loading || error) {
     return (
@@ -38,40 +43,94 @@ export function TrailsScreen() {
     );
   }
 
+  // --- Targeted view: trails ranked by one species' live odds ---
+  if (speciesFilter) {
+    const ranked = speciesView.trails;
+    return (
+      <div className={common.screen}>
+        <div className={s.header}>
+          <div className={common.eyebrow}>
+            {location.label} · best trails for this species
+          </div>
+          <div className={s.titleRow}>
+            <div className={common.title}>{speciesFilter.name}</div>
+          </div>
+          <div className={s.filterBanner}>
+            <BirdGlyph fill="var(--terracotta)" eyeFill="var(--forest)" size={16} />
+            <div className={s.filterText}>
+              <span style={{ color: "var(--sage-on-dark)" }}>Ranked by</span>{" "}
+              <span style={{ fontWeight: 700 }}>recent reports + season</span>
+            </div>
+            <button className={s.clearBtn} onClick={() => setSpeciesFilter(null)}>
+              Clear ✕
+            </button>
+          </div>
+        </div>
+
+        <div className={s.list}>
+          {speciesView.loading ? (
+            <CenterMessage title="Ranking trails…" />
+          ) : ranked.length === 0 ? (
+            <CenterMessage title="No nearby reports" detail="No recent reports of this species near you." />
+          ) : (
+            ranked.map((t) => {
+              const diff = normalizeDifficulty(t.difficulty);
+              const miles = t.metricLengthMi ?? t.lengthMi;
+              const odds = t.speciesLikelihood ?? 0;
+              return (
+                <button key={t.id} className={s.trailCard} onClick={() => open(t.id)}>
+                  <div className={s.cardTop}>
+                    {diff && <DifficultyMarker diff={diff} size={11} />}
+                    <div className={s.trailName}>{t.name}</div>
+                    <div
+                      className={odds >= 60 ? common.scoreChipHi : common.scoreChipMed}
+                      style={{ background: scoreChipBg(odds), color: scoreColor(odds) }}
+                    >
+                      {odds}%
+                    </div>
+                  </div>
+                  <div className={s.cardMeta}>
+                    {[miles != null ? `${miles} mi` : null, diff, `${odds}% odds nearby`]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </div>
+                  <div className={s.birdRow}>
+                    <BirdGlyph fill="var(--terracotta)" eyeFill="#fff" size={16} />
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                      {t.likelyBirds.slice(0, 4).map((b) => (
+                        <span key={b} className={s.birdChip}>
+                          {b}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        <BottomNav active="trails" />
+      </div>
+    );
+  }
+
+  // --- Default view: all trails, sortable ---
   const sorted = [...trails].sort((a, b) => {
     const c = compareTrails(a, b, trailSort);
     return trailDir === "asc" ? c : -c;
   });
-  const display = filterEntry ? sorted.filter((t) => filterEntry.trails.includes(t.id)) : sorted;
-
   const arrow = trailDir === "asc" ? "↑" : "↓";
-  const countLabel = `${display.length} trail${display.length === 1 ? "" : "s"}`;
-
-  const open = (id: string) => {
-    setDetailTrailId(id);
-    navigate("/trail");
-  };
 
   return (
     <div className={common.screen}>
       <div className={s.header}>
-        <div className={common.eyebrow}>{location.label} · {countLabel}</div>
+        <div className={common.eyebrow}>
+          {location.label} · {sorted.length} trail{sorted.length === 1 ? "" : "s"}
+        </div>
         <div className={s.titleRow}>
           <div className={common.title}>All trails</div>
         </div>
-
-        {filterEntry && (
-          <div className={s.filterBanner}>
-            <BirdGlyph fill="var(--terracotta)" eyeFill="var(--forest)" size={16} />
-            <div className={s.filterText}>
-              <span style={{ color: "var(--sage-on-dark)" }}>Filtered for</span>{" "}
-              <span style={{ fontWeight: 700 }}>{filterEntry.name}</span>
-            </div>
-            <button className={s.clearBtn} onClick={() => setTrailFilter(null)}>
-              Clear ✕
-            </button>
-          </div>
-        )}
 
         <div className={s.sortedBy}>
           Sorted by{" "}
@@ -82,14 +141,14 @@ export function TrailsScreen() {
 
         <div className={s.chipRow}>
           {TRAIL_SORT_CHIPS.map(({ key, label }) => {
-            const active = trailSort === key;
+            const isActive = trailSort === key;
             return (
               <button
                 key={key}
-                className={`${s.chip} ${active ? s.chipActive : s.chipIdle}`}
+                className={`${s.chip} ${isActive ? s.chipActive : s.chipIdle}`}
                 onClick={() => pickTrailSort(key)}
               >
-                {active ? `${label}  ${arrow}` : label}
+                {isActive ? `${label}  ${arrow}` : label}
               </button>
             );
           })}
@@ -97,7 +156,7 @@ export function TrailsScreen() {
       </div>
 
       <div className={s.list}>
-        {display.map((t) => (
+        {sorted.map((t) => (
           <button key={t.id} className={s.trailCard} onClick={() => open(t.id)}>
             <div className={s.cardTop}>
               {t.diff && <DifficultyMarker diff={t.diff} size={11} />}

@@ -126,52 +126,6 @@ export const TRIPS: Trip[] = [
 
 export type Likelihood = "High" | "Med" | "Rare";
 
-export interface Species {
-  name: string;
-  sci: string;
-  slotId: string;
-  img: string;
-  like: Likelihood;
-  trails: string[];
-}
-
-export const SPECIES: Species[] = [
-  {
-    name: "Barred Owl",
-    sci: "Strix varia",
-    slotId: "sp-barred-owl",
-    img: "/assets/barred-owl.jpg",
-    like: "High",
-    trails: ["owl", "cedar"],
-  },
-  {
-    name: "Pileated Woodpecker",
-    sci: "Dryocopus pileatus",
-    slotId: "sp-pileated",
-    img: "/assets/pileated-woodpecker.jpg",
-    like: "High",
-    trails: ["raptor", "cedar"],
-  },
-  {
-    name: "Red Fox",
-    sci: "Vulpes vulpes",
-    slotId: "sp-redfox",
-    img: "/assets/red-fox.jpg",
-    like: "Med",
-    trails: ["raptor", "marsh"],
-  },
-  {
-    name: "Northern Goshawk",
-    sci: "Accipiter gentilis",
-    slotId: "sp-goshawk",
-    img: "/assets/northern-goshawk.jpg",
-    like: "Rare",
-    trails: ["raptor"],
-  },
-];
-
-export const TOTAL_TRAILS_NEARBY = 14;
-export const SPECIES_NEARBY_COUNT = 412;
 export const TRAIL_HERO_IMG = "/assets/raptor-ridge.jpg";
 export const AVATAR_IMG = "/assets/avatar.jpg";
 export const VIEWFINDER_IMG = "/assets/viewfinder.jpg";
@@ -202,11 +156,6 @@ export function fmtTime(min: number): string {
   const h = Math.floor(min / 60);
   const m = min % 60;
   return h ? `${h}:${String(m).padStart(2, "0")}` : `${m} min`;
-}
-
-export function speciesByName(name: string | null): Species | null {
-  if (!name) return null;
-  return SPECIES.find((s) => s.name === name) ?? null;
 }
 
 export type TrailSortKey = "sighting" | "difficulty" | "time" | "effort" | "features";

@@ -74,6 +74,8 @@ class CatalogTrailOut(BaseModel):
     peak: str | None = None
     sightingHeadline: str | None = None
     factors: list[SightingFactor] = Field(default_factory=list)
+    # Set only when the list is filtered to one species: that species' odds near this trail.
+    speciesLikelihood: int | None = None
 
     @classmethod
     def from_model(
@@ -81,6 +83,7 @@ class CatalogTrailOut(BaseModel):
         t: CatalogTrail,
         score_info: dict | None = None,
         with_factors: bool = False,
+        species_likelihood: int | None = None,
     ) -> "CatalogTrailOut":
         wildlife = _wildlife_fields(score_info, with_factors)
         return cls(
@@ -102,6 +105,7 @@ class CatalogTrailOut(BaseModel):
             rideTimeMin=t.ride_time_min,
             effort=t.effort,
             elevSource=t.elev_source,
+            speciesLikelihood=species_likelihood,
             **wildlife,
         )
 

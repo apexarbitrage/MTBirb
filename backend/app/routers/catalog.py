@@ -25,7 +25,11 @@ from app.services.trail_catalog import (
     sightings_near_count,
 )
 from app.services.trail_metrics import bulk_compute_metrics, ensure_metrics
-from app.services.wildlife_likelihood import score_catalog_trails
+from app.services.wildlife_likelihood import (
+    score_catalog_trails,
+    score_species_for_trails,
+    species_near,
+)
 from app.services.wildlife_sync import (
     backfill_region_history,
     sync_notable_observations,
@@ -56,6 +60,7 @@ async def list_catalog_trails(
     radius_km: float = Query(40, ge=1, le=160),
     limit: int = Query(50, ge=1, le=200),
     lookback_days: int = Query(30, ge=1, le=60),
+    species: str | None = Query(None, description="rank by this eBird species code's odds"),
     db: Session = Depends(get_db),
 ) -> dict:
     fetched_now = 0
@@ -73,13 +78,48 @@ async def list_catalog_trails(
         synced_now += await sync_notable_observations(db, lat, lon, dist_km=25, back_days=back)
 
     trails = nearby_trails(db, lat, lon, radius_km, limit)
-    scores = score_catalog_trails(db, [t.id for t in trails], buffer_m=_AREA_BUFFER_M)
+    ids = [t.id for t in trails]
+    scores = score_catalog_trails(db, ids, buffer_m=_AREA_BUFFER_M)
+    # When targeting one species, also score each trail by that species' odds and rank by it.
+    sp = score_species_for_trails(db, ids, species) if species else {}
+    out = [
+        CatalogTrailOut.from_model(
+            t, scores.get(t.id), species_likelihood=sp.get(t.id, {}).get("likelihood") if species else None
+        )
+        for t in trails
+    ]
+    if species:
+        out.sort(key=lambda c: c.speciesLikelihood or 0, reverse=True)
     return {
-        "count": len(trails),
+        "count": len(out),
         "fetchedNow": fetched_now,
         "syncedNow": synced_now,
-        "trails": [CatalogTrailOut.from_model(t, scores.get(t.id)) for t in trails],
+        "species": species,
+        "trails": out,
     }
+
+
+@router.get("/species")
+async def list_species_near(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    radius_km: float = Query(15, ge=1, le=80),
+    limit: int = Query(16, ge=1, le=60),
+    notable_only: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Species reported near a point, ranked by recency+seasonality odds (the targeting picker).
+
+    Syncs the area's eBird feeds once if the cache is sparse, like the trail list does."""
+    synced_now = 0
+    if sightings_near_count(db, lat, lon, radius_km=15) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
+        synced_now += await sync_recent_observations(db, lat, lon, dist_km=15, back_days=30)
+        synced_now += await sync_notable_observations(db, lat, lon, dist_km=25, back_days=30)
+
+    species = species_near(db, lat, lon, radius_m=radius_km * 1000, limit=limit if not notable_only else 60)
+    if notable_only:
+        species = [s for s in species if s["notable"]][:limit]
+    return {"count": len(species), "syncedNow": synced_now, "species": species}
 
 
 @router.get("/trails/{external_id}")

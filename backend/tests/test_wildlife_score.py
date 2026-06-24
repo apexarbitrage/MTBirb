@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from app.schemas.catalog import CatalogTrailOut
 from app.services.trail_catalog import record_to_catalog
 from app.services.wildlife_likelihood import (
+    _likelihood_band,
     _recency_weight,
     _saturating_score,
     _score_from_richness,
@@ -54,6 +55,13 @@ def test_recency_weight_decays_with_age() -> None:
 def test_score_from_richness_still_saturates() -> None:
     assert _score_from_richness(0) == 0
     assert _score_from_richness(60) > _score_from_richness(15)
+
+
+def test_likelihood_band() -> None:
+    assert _likelihood_band(0.9, notable=True) == "Rare"  # notable always reads as the rare hook
+    assert _likelihood_band(0.2, notable=True) == "Rare"
+    assert _likelihood_band(0.7, notable=False) == "High"
+    assert _likelihood_band(0.3, notable=False) == "Med"
 
 
 def test_overlay_prefers_notable_for_peak_and_headline() -> None:

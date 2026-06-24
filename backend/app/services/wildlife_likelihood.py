@@ -280,3 +280,125 @@ def score_catalog_trails(
             "top_notable": notable,
         }
     return result
+
+
+# How "recent" a sighting must be to count a species as currently present near you (the picker).
+_PRESENCE_DAYS = 30
+
+
+def _likelihood_band(weight: float, notable: bool) -> str:
+    """A coarse High/Med/Rare label for a species' current odds (design-facing)."""
+    if notable:
+        return "Rare"
+    if weight >= 0.5:
+        return "High"
+    return "Med"
+
+
+def species_near(
+    db: Session,
+    lat: float,
+    lon: float,
+    radius_m: float = 15000,
+    limit: int = 12,
+    ref_date: datetime | None = None,
+) -> list[dict]:
+    """Species currently around a point, ranked by recency-weighted, season-adjusted odds.
+
+    Drives the targeting picker ("likely near you this week"). Counts species reported within
+    `radius_m` in the last ~month, weights each by recency and seasonality, and labels it
+    High/Med/Rare (notable species are the Rare hook).
+    """
+    now = ref_date or datetime.now(UTC)
+    cutoff = now - timedelta(days=_PRESENCE_DAYS)
+    point = func.cast(func.ST_SetSRID(func.ST_MakePoint(lon, lat), 4326), Geography)
+    rows = db.execute(
+        select(
+            WildlifeSighting.species_code,
+            WildlifeSighting.common_name,
+            func.max(WildlifeSighting.observed_at).label("last"),
+            func.bool_or(WildlifeSighting.is_notable).label("notable"),
+            func.count().label("n"),
+        )
+        .where(func.ST_DWithin(func.cast(WildlifeSighting.geom, Geography), point, radius_m))
+        .where(WildlifeSighting.observed_at >= cutoff)
+        .group_by(WildlifeSighting.species_code, WildlifeSighting.common_name)
+    ).all()
+
+    season = species_seasonality(db, [r.species_code for r in rows], ref_date=now)
+    out = []
+    for r in rows:
+        weight = _recency_weight(r.last, now) * season.get(r.species_code, 1.0)
+        out.append(
+            {
+                "species_code": r.species_code,
+                "common_name": r.common_name,
+                "last_observed": r.last,
+                "notable": bool(r.notable),
+                "observations": r.n,
+                "likelihood": round(100 * min(1.0, weight)),
+                "like": _likelihood_band(weight, bool(r.notable)),
+            }
+        )
+    # Most-likely first; break the (many) freshly-seen ties by how widely the species was reported.
+    out.sort(key=lambda s: (s["likelihood"], s["observations"], s["last_observed"]), reverse=True)
+    return out[:limit]
+
+
+# For per-species trail ranking, look this far out and decay the odds with distance to the
+# species' nearest recent report - so "best trails for X" is graded by proximity, not binary.
+_SPECIES_MAX_RADIUS_M = 25000
+_SPECIES_DIST_SCALE_M = 12000
+
+
+def score_species_for_trails(
+    db: Session, trail_ids: list[int], species_code: str
+) -> dict[int, dict]:
+    """Per-trail odds for one species, graded by proximity to its nearest recent report.
+
+    Powers "best trails for <species>": each trail is scored by how recently and how close the
+    species has been reported (within ~25 km), lifted/damped by its seasonality. Distance decay
+    keeps the ranking graded rather than a binary in-buffer/out flag, so there's always a best
+    trail to point at. 0 only when the species hasn't been reported anywhere near.
+    """
+    if not trail_ids:
+        return {}
+    now = datetime.now(UTC)
+    cutoff = now - timedelta(days=_SCORE_WINDOW_DAYS)
+    season = species_seasonality(db, [species_code], ref_date=now).get(species_code, 1.0)
+    trail_geog = func.cast(func.coalesce(CatalogTrail.line_geom, CatalogTrail.geom), Geography)
+    sight_geog = func.cast(WildlifeSighting.geom, Geography)
+    rows = db.execute(
+        select(
+            CatalogTrail.id,
+            func.max(WildlifeSighting.observed_at).label("last"),
+            func.min(func.ST_Distance(trail_geog, sight_geog)).label("dist_m"),
+            func.bool_or(WildlifeSighting.is_notable).label("notable"),
+        )
+        .join(
+            WildlifeSighting,
+            and_(
+                func.ST_DWithin(trail_geog, sight_geog, _SPECIES_MAX_RADIUS_M),
+                WildlifeSighting.species_code == species_code,
+                WildlifeSighting.observed_at >= cutoff,
+            ),
+            isouter=True,
+        )
+        .where(CatalogTrail.id.in_(trail_ids))
+        .group_by(CatalogTrail.id)
+    ).all()
+
+    result: dict[int, dict] = {}
+    for tid, last, dist_m, notable in rows:
+        if last is None:
+            result[tid] = {"likelihood": 0, "last_observed": None, "notable": False, "dist_m": None}
+            continue
+        dist_factor = math.exp(-(dist_m or 0.0) / _SPECIES_DIST_SCALE_M)
+        weight = _recency_weight(last, now) * season * dist_factor
+        result[tid] = {
+            "likelihood": round(100 * min(1.0, weight)),
+            "last_observed": last,
+            "notable": bool(notable),
+            "dist_m": round(dist_m) if dist_m is not None else None,
+        }
+    return result
