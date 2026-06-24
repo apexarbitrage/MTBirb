@@ -24,5 +24,8 @@ class WildlifeSighting(Base):
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     checklist_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_obscured: Mapped[bool] = mapped_column(Boolean, default=False)
+    # True when this record came from eBird's "notable" feed: a locally rare/unusual sighting,
+    # the basis for the product's "something unusual" odds (distinct from common-species counts).
+    is_notable: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     geom: Mapped[str] = mapped_column(Geometry(geometry_type="POINT", srid=4326))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -1,10 +1,14 @@
-"""Hermetic tests for the first-pass wildlife score + its presentation (no DB, no network)."""
+"""Hermetic tests for the recency-decayed + notable wildlife score and its presentation."""
 
 from datetime import UTC, datetime, timedelta
 
 from app.schemas.catalog import CatalogTrailOut
 from app.services.trail_catalog import record_to_catalog
-from app.services.wildlife_likelihood import _score_from_richness
+from app.services.wildlife_likelihood import (
+    _recency_weight,
+    _saturating_score,
+    _score_from_richness,
+)
 
 RECORD = {
     "id": 287262,
@@ -16,72 +20,92 @@ RECORD = {
 }
 
 
-def test_score_from_richness_monotonic_and_bounded() -> None:
+def _species(name, days_ago, notable=False):
+    now = datetime.now(UTC)
+    last = now - timedelta(days=days_ago)
+    return {
+        "species_code": name[:6].lower(),
+        "common_name": name,
+        "last_observed": last,
+        "notable": notable,
+        "weight": _recency_weight(last, now),
+    }
+
+
+def test_saturating_score_bounds_and_monotonic() -> None:
+    assert _saturating_score(0, 10) == 0
+    assert _saturating_score(-1, 10) == 0
+    vals = [_saturating_score(x, 10) for x in (1, 5, 20, 100)]
+    assert vals == sorted(vals)
+    assert vals[-1] <= 98
+
+
+def test_recency_weight_decays_with_age() -> None:
+    now = datetime.now(UTC)
+    fresh = _recency_weight(now, now)
+    week = _recency_weight(now - timedelta(days=7), now)
+    month = _recency_weight(now - timedelta(days=30), now)
+    assert fresh > week > month
+    assert abs(fresh - 1.0) < 1e-6  # seen "now" -> full weight
+    assert month < 0.3  # a month stale -> faded
+    assert _recency_weight(None, now) == 0.3  # unknown date -> small floor
+
+
+def test_score_from_richness_still_saturates() -> None:
     assert _score_from_richness(0) == 0
-    assert _score_from_richness(-3) == 0
-    # More species -> higher score, saturating below 100.
-    scores = [_score_from_richness(n) for n in (5, 15, 30, 60, 200)]
-    assert scores == sorted(scores)
-    assert scores[-1] <= 98
     assert _score_from_richness(60) > _score_from_richness(15)
 
 
-def test_from_model_attaches_wildlife_overlay() -> None:
+def test_overlay_prefers_notable_for_peak_and_headline() -> None:
     c = record_to_catalog(RECORD)
-    now = datetime.now(UTC)
     score_info = {
-        "score": 88,
-        "species_count": 58,
+        "score": 84,
+        "notable_score": 61,
+        "species_count": 40,
+        "notable_count": 2,
         "top_species": [
-            {"species_code": "acowoo", "common_name": "Acorn Woodpecker", "last_observed": now},
-            {"species_code": "stejay", "common_name": "Steller's Jay", "last_observed": now},
-            {"species_code": "annhum", "common_name": "Anna's Hummingbird", "last_observed": now},
-            {"species_code": "amerob", "common_name": "American Robin", "last_observed": now},
+            _species("Northern Mockingbird", 0),
+            _species("Rock Pigeon", 1),
+            _species("Acorn Woodpecker", 2),
         ],
+        "top_notable": [_species("Northern Gannet", 1, True), _species("Laughing Gull", 3, True)],
     }
-    out = CatalogTrailOut.from_model(c, score_info, lookback_days=30, with_factors=True)
-    assert out.score == 88
-    assert out.likelyBirds == ["Acorn Woodpecker", "Steller's Jay", "Anna's Hummingbird"]  # top 3
-    assert out.metaBird == "Acorn Woodpecker"
-    assert out.peak == "Acorn Woodpecker, Steller's Jay"  # top 2
-    assert "58 species" in out.sightingHeadline
-    # Factors are built from real signals and labelled by score/recency.
-    labels = {f.label for f in out.factors}
-    assert {"Species nearby", "Most recent report", "Top species"} <= labels
-    species_factor = next(f for f in out.factors if f.label == "Species nearby")
-    assert species_factor.value == "58 in 30d"
-    assert species_factor.tone == "terracotta"  # score >= 70
+    out = CatalogTrailOut.from_model(c, score_info, with_factors=True)
+    assert out.score == 84
+    assert out.notableScore == 61
+    # likely = common recent species; notable = the rare hook
+    assert out.likelyBirds[0] == "Northern Mockingbird"
+    assert out.notableBirds == ["Northern Gannet", "Laughing Gull"]
+    assert out.peak == "Northern Gannet, Laughing Gull"  # peak draws from notable, not pigeons
+    assert out.metaBird == "Northern Gannet"
+    assert "Northern Gannet" in out.sightingHeadline and "notable" in out.sightingHeadline
+    labels = [f.label for f in out.factors]
+    assert labels == ["Notable nearby", "Species activity", "Most recent report"]
+    assert out.factors[0].value == "2 species"
 
 
-def test_from_model_without_score_has_empty_overlay() -> None:
-    out = CatalogTrailOut.from_model(record_to_catalog(RECORD))
-    assert out.score is None
-    assert out.likelyBirds == []
-    assert out.factors == []
-
-
-def test_from_model_no_recent_reports_headline() -> None:
-    out = CatalogTrailOut.from_model(
-        record_to_catalog(RECORD),
-        {"score": 0, "species_count": 0, "top_species": []},
-        with_factors=True,
-    )
-    assert out.score == 0
-    assert out.sightingHeadline == "No recent eBird reports nearby"
-    assert out.factors[1].value == "—"  # most-recent report when there are none
-
-
-def test_recency_humanizes_days() -> None:
-    week_ago = datetime.now(UTC) - timedelta(days=7)
+def test_overlay_falls_back_to_likely_when_no_notable() -> None:
     out = CatalogTrailOut.from_model(
         record_to_catalog(RECORD),
         {
-            "score": 50,
-            "species_count": 10,
-            "top_species": [
-                {"species_code": "x", "common_name": "Test Bird", "last_observed": week_ago}
-            ],
+            "score": 70,
+            "notable_score": 0,
+            "species_count": 12,
+            "notable_count": 0,
+            "top_species": [_species("Mallard", 0), _species("Canada Goose", 1)],
+            "top_notable": [],
         },
         with_factors=True,
     )
-    assert out.factors[1].value == "7 days ago"
+    assert out.notableBirds == []
+    assert out.peak == "Mallard, Canada Goose"  # no notable -> likely
+    assert "12 species reported nearby recently" == out.sightingHeadline
+    assert out.factors[0].value == "0 species"  # notable nearby
+
+
+def test_overlay_empty_without_score() -> None:
+    out = CatalogTrailOut.from_model(record_to_catalog(RECORD))
+    assert out.score is None
+    assert out.notableScore is None
+    assert out.likelyBirds == [] and out.notableBirds == []
+    assert out.factors == []

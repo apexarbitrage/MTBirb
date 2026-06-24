@@ -26,7 +26,7 @@ from app.services.trail_catalog import (
 )
 from app.services.trail_metrics import bulk_compute_metrics, ensure_metrics
 from app.services.wildlife_likelihood import score_catalog_trails
-from app.services.wildlife_sync import sync_recent_observations
+from app.services.wildlife_sync import sync_notable_observations, sync_recent_observations
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -59,24 +59,22 @@ async def list_catalog_trails(
         # TrailAPI radius is in miles; cap at its useful range.
         fetched_now = await cache_trails_near(db, lat, lon, radius=min(int(radius_km * 0.62) + 1, 100))
 
-    # The first-pass wildlife score reads cached sightings; sync the area once if it's sparse so
-    # newly-browsed regions aren't scored against an empty cache.
+    # The wildlife score reads cached sightings; sync the area once if it's sparse so a
+    # newly-browsed region isn't scored against an empty cache. Both feeds: the common-species
+    # recent feed (activity) and the notable feed (rare sightings).
     synced_now = 0
+    back = min(lookback_days, 30)  # eBird's recent feeds cap at back=30
     if sightings_near_count(db, lat, lon, radius_km=15) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
-        synced_now = await sync_recent_observations(db, lat, lon, dist_km=15, back_days=lookback_days)
+        synced_now += await sync_recent_observations(db, lat, lon, dist_km=15, back_days=back)
+        synced_now += await sync_notable_observations(db, lat, lon, dist_km=25, back_days=back)
 
     trails = nearby_trails(db, lat, lon, radius_km, limit)
-    scores = score_catalog_trails(
-        db, [t.id for t in trails], buffer_m=_AREA_BUFFER_M, lookback_days=lookback_days
-    )
+    scores = score_catalog_trails(db, [t.id for t in trails], buffer_m=_AREA_BUFFER_M)
     return {
         "count": len(trails),
         "fetchedNow": fetched_now,
         "syncedNow": synced_now,
-        "trails": [
-            CatalogTrailOut.from_model(t, scores.get(t.id), lookback_days=lookback_days)
-            for t in trails
-        ],
+        "trails": [CatalogTrailOut.from_model(t, scores.get(t.id)) for t in trails],
     }
 
 

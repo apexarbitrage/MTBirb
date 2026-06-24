@@ -93,13 +93,20 @@ step, not an oversight.
   floating button (`BirdIdFab`, on Discover + Trail detail) and Optimal time (tap the Discover hero
   window, or a Trail-detail stat tile).
 
-### The wildlife-likelihood model is the product's core differentiator, and is intentionally unfinished
+### The wildlife-likelihood model is the product's core differentiator, and is still maturing
 
-`app/services/wildlife_likelihood.py` buffers a trail's geometry and counts nearby cached
-`WildlifeSighting` rows within a lookback window. That's a raw-count proxy, not a calibrated
-"highest chance of seeing an owl" probability - it doesn't yet account for eBird search effort
-(checklists per area), seasonality, or time of day. Treat this as the area needing the most
-design work, not as a finished feature to extend incrementally.
+`app/services/wildlife_likelihood.py` scores a trail from cached `WildlifeSighting` rows within
+a buffer of its geometry. `score_catalog_trails` is the batched scorer the catalog uses: each
+species is weighted by how recently it was last seen (`exp(-days/tau)`, so stale reports fade),
+and the weights saturate into two 0..98 axes - an overall activity `score` (all species) and a
+`notable_score` (only species from eBird's *notable* feed, flagged via `WildlifeSighting.is_notable`
+and synced by `sync_notable_observations`). So "likely birds" are the common recent species and
+"notable"/`peak` are the rare ones - the product's real hook. Still an area-level proxy, not a
+calibrated probability: it does not yet weight by eBird search effort (checklists per area), time
+of day, or **seasonality**. Seasonality is the next piece and needs real cross-year history -
+the recent/notable feeds cap at `back=30` days, so it relies on sampling eBird's per-region
+`historic` endpoint (`EBirdClient.historic_observations`) across the calendar. Treat this model
+as the area still needing the most design work.
 
 ### Trail terrain metrics are two-tier (Open-Meteo, then USGS)
 
