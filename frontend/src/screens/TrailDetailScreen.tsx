@@ -5,6 +5,7 @@ import { ScoreRing } from "../components/ScoreRing";
 import { Photo } from "../components/Photo";
 import { CenterMessage } from "../components/CenterMessage";
 import { useTrails } from "../data/TrailsProvider";
+import { useTrailWildlife } from "../data/useTrailWildlife";
 import { TRAIL_HERO_IMG, fmtTime } from "../data/trails";
 import { useAppState } from "../state/AppState";
 import s from "./TrailDetailScreen.module.css";
@@ -27,6 +28,7 @@ export function TrailDetailScreen() {
   const { byId, loading, error, reload } = useTrails();
   const { detailTrailId, setDetailTrailId } = useAppState();
   const t = byId(detailTrailId);
+  const { species: nearbySpecies } = useTrailWildlife(t?.id);
 
   if (loading || error || !t) {
     return (
@@ -199,6 +201,28 @@ export function TrailDetailScreen() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* Recent eBird species near this trail (real data from cached observations) */}
+          <div className={s.ebirdCard}>
+            <div className={s.ebirdHead}>
+              <span className={s.ebirdHeadTitle}>RECENT NEAR HERE</span>
+              <span className={s.ebirdHeadMeta}>eBird · 14d · 750m</span>
+            </div>
+            {nearbySpecies === null ? (
+              <div className={s.ebirdEmpty}>Loading recent reports…</div>
+            ) : nearbySpecies.length === 0 ? (
+              <div className={s.ebirdEmpty}>No eBird reports within 750 m in the last 14 days.</div>
+            ) : (
+              <div className={s.ebirdChips}>
+                {nearbySpecies.map((sp) => (
+                  <span key={sp.species_code} className={s.ebirdChip}>
+                    {sp.common_name}
+                    <span className={s.ebirdCount}>{sp.observations}</span>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Features */}

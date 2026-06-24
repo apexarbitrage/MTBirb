@@ -195,6 +195,63 @@
   white-space: nowrap;
 }
 
+.ebirdCard {
+  margin-top: 16px;
+  background: var(--white);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 14px 15px;
+}
+
+.ebirdHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.ebirdHeadTitle {
+  color: var(--sage-text-deep);
+  font-weight: 700;
+}
+
+.ebirdHeadMeta {
+  color: var(--terracotta);
+}
+
+.ebirdChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.ebirdChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--tan-accent);
+  background: var(--sand-bird-chip);
+  padding: 5px 10px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.ebirdCount {
+  font-weight: 800;
+  color: var(--terracotta);
+}
+
+.ebirdEmpty {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
 .actionBar {
   position: absolute;
   left: 0;
