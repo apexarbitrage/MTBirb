@@ -71,10 +71,20 @@ backend over HTTP, proxied under `/api` in dev (see `frontend/vite.config.ts`).
 ### Frontend structure
 
 The PWA implements the hi-fi design (9 screens: 5 core tabs - Discover, Birbs/Targeting, Trails,
-Trips, You - plus 4 flow screens - Trail detail, Optimal time, Fun-drive nav, Bird ID). It runs
-on **static sample data**, not the backend yet (see `src/data/trails.ts` - the same 4 trails / 4
-species / 4 trips as the design prototype). Wiring screens to the FastAPI API is a deliberate next
-step, not an oversight.
+Trips, You - plus 4 flow screens - Trail detail, Optimal time, Fun-drive nav, Bird ID). Most of it
+now runs on the **live backend**, not the design's static sample data:
+- Discover / Trails / Trail detail read the real catalog near the user's location (`TrailsProvider`
+  + `useGeolocation` → `GET /catalog/trails`), with the recency/season/notable wildlife score,
+  OSM-derived elevation, eBird species, and NWS weather.
+- Targeting (Birbs) ranks trails by a chosen species' live odds (`GET /catalog/species`,
+  `?species=` on the trail list); its filter lives in `AppState.speciesFilter`.
+- Trips is a real logged-ride store (`GET`/`POST /trips`): the log-ride sheet on the trail detail
+  records species (checked off the trail's eBird birds or typed in) and geotagged photos
+  (`exifr` reads EXIF GPS client-side; only a downscaled thumbnail + coords are kept), mapped onto
+  the trail line.
+Still static/illustrative: the You tab, Optimal-time's curve (the calibrated best-time model is
+deferred), and Bird ID (BirdNET isn't wired). `src/data/trails.ts` now holds just the shared
+`Trail` type + helpers, not sample rows.
 
 - `src/screens/` - one component + co-located CSS Module per screen, routed in `src/App.tsx`
   (React Router). Flow screens have no bottom nav and use `BackButton`.
@@ -84,7 +94,9 @@ step, not an oversight.
 - `src/state/AppState.tsx` - React Context holding cross-screen state (Discover hero/sort, Trails
   sort/dir, the Targeting→Trails species filter, the Trail-detail subject). Screen-local UI state
   stays in the screens.
-- `src/data/trails.ts` - sample data + the ported sort/format/score helpers.
+- `src/data/trails.ts` - the shared `Trail` type, the catalog→Trail adapter, and the ported
+  sort/format/score helpers (the static sample rows are gone). `src/data/use*.ts` are the backend
+  hooks (trails, catalog detail, nearby species, species-ranked trails, trips, geolocation).
 - `src/styles/tokens.css` - all design tokens as CSS custom properties; use these, don't hard-code
   hex. `common.module.css` holds shared visual atoms (eyebrow, title, card, score chips).
 - Photos go in `public/assets/` (see its README for the exact filenames); slots show a tasteful
