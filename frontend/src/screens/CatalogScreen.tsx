@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { BackButton } from "../components/BackButton";
 import { useCatalogTrails } from "../data/useCatalogTrails";
 import common from "../styles/common.module.css";
@@ -16,6 +17,7 @@ const PRESETS = [
 ];
 
 export function CatalogScreen() {
+  const navigate = useNavigate();
   const [sel, setSel] = useState(0);
   const place = PRESETS[sel];
   const { trails, loading, error, fetchedNow } = useCatalogTrails(place.lat, place.lon);
@@ -55,20 +57,14 @@ export function CatalogScreen() {
             </div>
             <div className={s.list}>
               {trails.map((t) => (
-                <a
-                  key={t.id}
-                  className={s.card}
-                  href={t.url ?? undefined}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <button key={t.id} className={s.card} onClick={() => navigate(`/catalog/${t.id}`)}>
                   <div className={s.name}>{t.name}</div>
                   <div className={s.meta}>
                     {[t.difficulty, t.lengthMi != null ? `${t.lengthMi} mi` : null, t.city]
                       .filter(Boolean)
                       .join(" · ")}
                   </div>
-                </a>
+                </button>
               ))}
             </div>
           </>

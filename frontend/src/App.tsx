@@ -9,6 +9,7 @@ import { OptimalTimeScreen } from "./screens/OptimalTimeScreen";
 import { FunDriveNavScreen } from "./screens/FunDriveNavScreen";
 import { BirdIdScreen } from "./screens/BirdIdScreen";
 import { CatalogScreen } from "./screens/CatalogScreen";
+import { CatalogDetailScreen } from "./screens/CatalogDetailScreen";
 
 export function App() {
   return (
@@ -26,6 +27,7 @@ export function App() {
         <Route path="/navigate" element={<FunDriveNavScreen />} />
         <Route path="/bird-id" element={<BirdIdScreen />} />
         <Route path="/catalog" element={<CatalogScreen />} />
+        <Route path="/catalog/:id" element={<CatalogDetailScreen />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

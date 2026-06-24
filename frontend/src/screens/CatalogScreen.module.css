@@ -53,11 +53,12 @@
 
 .card {
   display: block;
+  width: 100%;
+  text-align: left;
   background: var(--white);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
   padding: 13px 15px;
-  text-decoration: none;
   color: inherit;
 }
 .card:active {
