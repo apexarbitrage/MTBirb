@@ -26,7 +26,11 @@ from app.services.trail_catalog import (
 )
 from app.services.trail_metrics import bulk_compute_metrics, ensure_metrics
 from app.services.wildlife_likelihood import score_catalog_trails
-from app.services.wildlife_sync import sync_notable_observations, sync_recent_observations
+from app.services.wildlife_sync import (
+    backfill_region_history,
+    sync_notable_observations,
+    sync_recent_observations,
+)
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
 
@@ -133,6 +137,19 @@ async def catalog_trail_weather(external_id: str, db: Session = Depends(get_db))
         for p in periods[:12]
     ]
     return {"trail": external_id, "periods": trimmed}
+
+
+@router.post("/backfill-history")
+async def backfill_history(
+    region_code: str = Query(..., description="eBird region, e.g. a county like US-CA-081"),
+    year: int = Query(..., ge=2000, le=2100),
+    day: int = Query(15, ge=1, le=28),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Sample one historic day per month for an eBird region to seed the seasonality signal."""
+    if not get_settings().ebird_api_key:
+        raise HTTPException(status_code=503, detail="eBird API key not configured")
+    return await backfill_region_history(db, region_code, year, day=day)
 
 
 @router.post("/enrich-geometry")

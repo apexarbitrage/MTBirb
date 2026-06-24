@@ -7,6 +7,7 @@ it never tries to recover precise coordinates for records eBird coarsened or wit
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timezone
 
 from geoalchemy2.elements import WKTElement
@@ -121,3 +122,34 @@ async def sync_notable_observations(
     client = client or EBirdClient()
     observations = await client.notable_observations(lat, lng, dist_km, back_days)
     return upsert_sightings(db, observations, is_notable=True)
+
+
+async def backfill_region_history(
+    db: Session,
+    region_code: str,
+    year: int,
+    months: list[int] | None = None,
+    day: int = 15,
+    client: EBirdClient | None = None,
+) -> dict:
+    """Cache one historic day per month for a region, to build the cross-season phenology.
+
+    The recent feeds only reach 30 days back, so the per-region historic endpoint is the only
+    way to learn which species occur at other times of year. Sampling one representative day a
+    month (the 15th by default) over a year is enough for a coarse seasonal signal at modest
+    cost (~12 calls/region). Rows carry their real historic dates, so they feed seasonality
+    without inflating the recency-weighted score.
+    """
+    client = client or EBirdClient()
+    months = months or list(range(1, 13))
+    added = 0
+    calls = 0
+    for month in months:
+        try:
+            obs = await client.historic_observations(region_code, year, month, day)
+        except Exception:  # noqa: BLE001 - skip a month that errors, keep sampling the rest
+            continue
+        calls += 1
+        added += upsert_sightings(db, obs)
+        await asyncio.sleep(0.2)  # be gentle on the eBird API
+    return {"region": region_code, "year": year, "calls": calls, "added": added}

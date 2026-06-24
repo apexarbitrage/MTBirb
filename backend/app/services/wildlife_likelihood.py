@@ -29,8 +29,19 @@ _RECENCY_TAU_DAYS = 21.0
 # Weight for a record with no usable date (rare); small but non-zero.
 _UNKNOWN_DATE_WEIGHT = 0.3
 # Scoring looks back up to a year so accumulated/backfilled history counts; recency decay (not a
-# hard cutoff) is what down-weights older records. Seasonality will further modulate this (2b).
+# hard cutoff) is what down-weights older records. Seasonality further modulates this.
 _SCORE_WINDOW_DAYS = 365
+
+# Seasonality: in which months a species is *typically* present, learned from cached history.
+# We deliberately exclude the recent window so the dense current-month feed doesn't make every
+# species look in-season (a single recent stray shouldn't mark a month typical). Phenology is
+# the set of months a species appears in across the older/backfilled record; today's month
+# (with neighbours) either lands in that set or it doesn't. An out-of-season species is damped
+# to the floor; an in-season specialist gets a modest lift over a year-round resident.
+_SEASON_RECENT_EXCLUDE_DAYS = 35
+_SEASON_FLOOR = 0.3
+_SEASON_BOOST = 0.4  # max extra weight for a tightly-seasonal species in its window
+_SEASON_RESIDENT_MONTHS = 11  # present ~year-round -> treat as neutral
 
 
 def score_trail_for_species(
@@ -134,6 +145,53 @@ def _recency_weight(observed_at: datetime | None, now: datetime) -> float:
     return math.exp(-days / _RECENCY_TAU_DAYS)
 
 
+def _month_neighbours(month: int) -> set[int]:
+    """The month and its two calendar neighbours (wrapping Dec<->Jan), 1-based."""
+    return {(month - 2) % 12 + 1, month, month % 12 + 1}
+
+
+def _seasonal_factor(months_present: set[int], today_month: int) -> float:
+    """How in-season a species is this month, from the set of months it's historically present.
+
+    Neutral (1.0) when we have no phenology or the species is essentially year-round. Otherwise
+    it's either in season (this month or a neighbour is in the set) - lifted a little, more so
+    the more tightly seasonal it is - or out of season, damped to the floor.
+    """
+    n = len(months_present)
+    if n == 0 or n >= _SEASON_RESIDENT_MONTHS:
+        return 1.0
+    if months_present & _month_neighbours(today_month):
+        return round(1.0 + (1 - n / 12) * _SEASON_BOOST, 3)
+    return _SEASON_FLOOR
+
+
+def species_seasonality(
+    db: Session, species_codes: list[str], ref_date: datetime | None = None
+) -> dict[str, float]:
+    """Per-species seasonal factor for `ref_date` (default now), from historic phenology.
+
+    Uses each species' set of months present in the cache *outside* the recent window, so the
+    dense current-month feed doesn't flatten the signal. Phenology is treated as a species-level
+    property across the (regional) cache, so it's unfiltered by trail. Species with no historic
+    record simply don't appear here and default to neutral at the call site.
+    """
+    if not species_codes:
+        return {}
+    now = ref_date or datetime.now(UTC)
+    cutoff = now - timedelta(days=_SEASON_RECENT_EXCLUDE_DAYS)
+    rows = db.execute(
+        select(WildlifeSighting.species_code, WildlifeSighting.observed_at).where(
+            WildlifeSighting.species_code.in_(species_codes),
+            WildlifeSighting.observed_at < cutoff,
+        )
+    ).all()
+    months: dict[str, set[int]] = {}
+    for code, observed_at in rows:
+        if observed_at is not None:
+            months.setdefault(code, set()).add(observed_at.month)
+    return {code: _seasonal_factor(m, now.month) for code, m in months.items()}
+
+
 def score_catalog_trails(
     db: Session,
     trail_ids: list[int],
@@ -146,9 +204,10 @@ def score_catalog_trails(
     matched, else trailhead point), weight each by how recently it was last seen (so stale
     reports fade rather than counting forever), and saturate the sum into two 0..98 scores:
     an overall `score` (all species - "how alive is this place") and a `notable_score` (only
-    species from eBird's notable feed - "odds of something unusual"). Still an area-level proxy,
-    not a calibrated probability; seasonality weighting is layered on next (2b). One spatial
-    join feeds every trail; ranking happens in Python. Returns per trail id: `score`,
+    species from eBird's notable feed - "odds of something unusual"). Each species' weight is
+    also scaled by a seasonal factor (`species_seasonality`), so an out-of-season vagrant counts
+    for less than an in-season regular. Still an area-level proxy, not a calibrated probability.
+    One spatial join feeds every trail; ranking happens in Python. Returns per trail id: `score`,
     `notable_score`, `species_count`, `notable_count`, `top_species`, and `top_notable`.
     """
     if not trail_ids:
@@ -191,6 +250,10 @@ def score_catalog_trails(
                 entry["observed_at"] = observed_at
             entry["notable"] = entry["notable"] or bool(notable)
 
+    # Seasonal factor per species (one pass over all species present near these trails).
+    all_codes = {code for tid in trail_ids for code in per[tid]}
+    season = species_seasonality(db, list(all_codes), ref_date=now)
+
     result: dict[int, dict] = {}
     for tid in trail_ids:
         species = [
@@ -199,7 +262,8 @@ def score_catalog_trails(
                 "common_name": e["name"],
                 "last_observed": e["observed_at"],
                 "notable": e["notable"],
-                "weight": _recency_weight(e["observed_at"], now),
+                "season": season.get(code, 1.0),
+                "weight": _recency_weight(e["observed_at"], now) * season.get(code, 1.0),
             }
             for code, e in per[tid].items()
         ]

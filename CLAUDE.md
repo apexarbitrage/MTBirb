@@ -101,12 +101,16 @@ species is weighted by how recently it was last seen (`exp(-days/tau)`, so stale
 and the weights saturate into two 0..98 axes - an overall activity `score` (all species) and a
 `notable_score` (only species from eBird's *notable* feed, flagged via `WildlifeSighting.is_notable`
 and synced by `sync_notable_observations`). So "likely birds" are the common recent species and
-"notable"/`peak` are the rare ones - the product's real hook. Still an area-level proxy, not a
-calibrated probability: it does not yet weight by eBird search effort (checklists per area), time
-of day, or **seasonality**. Seasonality is the next piece and needs real cross-year history -
-the recent/notable feeds cap at `back=30` days, so it relies on sampling eBird's per-region
-`historic` endpoint (`EBirdClient.historic_observations`) across the calendar. Treat this model
-as the area still needing the most design work.
+"notable"/`peak` are the rare ones - the product's real hook. Each species' weight is also scaled
+by **seasonality** (`species_seasonality`): the set of months it's historically present (learned
+from records older than ~35 days so the dense current feed doesn't flatten it), so an out-of-season
+vagrant is damped and an in-season specialist lifted. Because the recent/notable feeds cap at
+`back=30` days, that cross-season history comes from sampling eBird's per-region `historic` endpoint
+- `backfill_region_history` (one day/month) behind `POST /catalog/backfill-history`, which must be
+run per region (like the catalog seed) for seasonality to have signal. Still an area-level proxy,
+not a calibrated probability: it does not yet weight by eBird search effort (checklists per area) or
+time of day, and the historic sampling is coarse (one day/month under-detects month presence).
+Treat this model as the area still maturing - the highest-value place to keep deepening.
 
 ### Trail terrain metrics are two-tier (Open-Meteo, then USGS)
 
