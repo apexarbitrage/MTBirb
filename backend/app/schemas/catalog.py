@@ -17,6 +17,16 @@ class CatalogTrailOut(BaseModel):
     lat: float
     lon: float
     url: str | None
+    # DEM-derived terrain metrics (null until computed); see services/trail_metrics.py.
+    metricLengthMi: float | None
+    ascentFt: int | None
+    descentFt: int | None
+    avgUpGrade: str | None
+    avgDownGrade: str | None
+    elevationProfile: list[float] | None
+    rideTimeMin: int | None
+    effort: float | None
+    elevSource: str | None
 
     @classmethod
     def from_model(cls, t: CatalogTrail) -> "CatalogTrailOut":
@@ -30,4 +40,13 @@ class CatalogTrailOut(BaseModel):
             lat=t.lat,
             lon=t.lon,
             url=t.url,
+            metricLengthMi=t.metric_length_mi,
+            ascentFt=t.ascent_ft,
+            descentFt=t.descent_ft,
+            avgUpGrade=t.avg_up_grade,
+            avgDownGrade=t.avg_down_grade,
+            elevationProfile=t.elevation_profile,
+            rideTimeMin=t.ride_time_min,
+            effort=t.effort,
+            elevSource=t.elev_source,
         )

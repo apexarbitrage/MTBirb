@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
+from app.integrations.elevation import OpenMeteoElevation, UsgsElevation
 from app.integrations.weather import WeatherClient
 from app.models import CatalogTrail
 from app.schemas.catalog import CatalogTrailOut
@@ -23,6 +24,7 @@ from app.services.trail_catalog import (
     recent_species_near_catalog,
     sightings_near_count,
 )
+from app.services.trail_metrics import bulk_compute_metrics, ensure_metrics
 from app.services.wildlife_sync import sync_recent_observations
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -65,11 +67,16 @@ async def list_catalog_trails(
 
 @router.get("/trails/{external_id}")
 async def get_catalog_trail(external_id: str, db: Session = Depends(get_db)) -> dict:
-    """A catalog trail's detail. Fetches its OSM line on demand if it doesn't have one yet."""
+    """A catalog trail's detail. Fetches its OSM line on demand, then refines its terrain
+    metrics to the higher-resolution USGS 3DEP DEM (the initial pass uses Open-Meteo)."""
     trail = _get_catalog_or_404(db, external_id)
     try:
         await ensure_line(db, trail)
     except Exception:  # noqa: BLE001 - a line is a nice-to-have; never fail the detail on it
+        pass
+    try:
+        await ensure_metrics(db, trail, UsgsElevation())
+    except Exception:  # noqa: BLE001 - keep any existing (Open-Meteo) metrics on DEM failure
         pass
     return {"trail": CatalogTrailOut.from_model(trail), "linePoints": line_points(db, trail.id)}
 
@@ -118,10 +125,29 @@ async def enrich_geometry(
     north: float = Query(...),
     east: float = Query(...),
     max_calls: int = Query(40, ge=1, le=400),
+    force: bool = Query(False),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Batch-match OSM lines for catalog trails in a bbox (one Overpass call per trail)."""
-    return await enrich_region(db, (south, north), (west, east), max_calls=max_calls)
+    """Batch-match OSM lines for catalog trails in a bbox (one Overpass call per trail).
+    `force` re-assembles existing lines too (to upgrade older single-way fragments)."""
+    return await enrich_region(db, (south, north), (west, east), max_calls=max_calls, force=force)
+
+
+@router.post("/compute-metrics")
+async def compute_metrics(
+    south: float = Query(...),
+    west: float = Query(...),
+    north: float = Query(...),
+    east: float = Query(...),
+    max_trails: int = Query(200, ge=1, le=500),
+    force: bool = Query(False),
+    db: Session = Depends(get_db),
+) -> dict:
+    """The fast initial elevation pass: compute terrain metrics for lined trails in a bbox
+    using batched Open-Meteo lookups. USGS refinement happens per-trail on detail view."""
+    return await bulk_compute_metrics(
+        db, (south, north), (west, east), OpenMeteoElevation(), max_trails=max_trails, force=force
+    )
 
 
 @router.post("/sync")

@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 import { BackButton } from "../components/BackButton";
 import { CenterMessage } from "../components/CenterMessage";
 import { useCatalogDetail } from "../data/useCatalogDetail";
+import { fmtTime } from "../data/trails";
 import { shortSky } from "../data/useTrailWeather";
 import common from "../styles/common.module.css";
 import s from "./CatalogDetailScreen.module.css";
@@ -9,6 +10,18 @@ import s from "./CatalogDetailScreen.module.css";
 const W = 300;
 const H = 130;
 const PAD = 12;
+
+/** Build the polyline + filled-area paths for a normalized 0..1 elevation profile. */
+function elevationPaths(elev: number[]) {
+  const step = 300 / Math.max(elev.length - 1, 1);
+  const pts = elev.map((n, i) => `${(i * step).toFixed(1)},${(60 - n * 46).toFixed(1)}`);
+  return { polyline: pts.join(" "), area: `M${pts.join(" L")} L300,70 L0,70 Z` };
+}
+
+const ELEV_SOURCE_LABEL: Record<string, string> = {
+  usgs: "USGS 3DEP",
+  "open-meteo": "Open-Meteo",
+};
 
 /** Project [lon, lat] points into an SVG polyline, uniform scale, lat pointing up. */
 function linePolyline(points: [number, number][]): string {
@@ -87,6 +100,77 @@ export function CatalogDetailScreen() {
           </div>
         ) : (
           <div className={s.note}>No OSM line matched near this trailhead.</div>
+        )}
+
+        {trail.elevationProfile && trail.elevationProfile.length > 1 && (
+          <>
+            <div className={s.statGrid}>
+              <div className={s.statTile}>
+                <div className={s.statNum}>{trail.metricLengthMi ?? "–"}</div>
+                <div className={s.statLabel}>MAPPED MI</div>
+              </div>
+              <div className={s.statTile}>
+                <div className={s.statNum} style={{ color: "var(--terracotta)" }}>
+                  {trail.effort ?? "–"}
+                </div>
+                <div className={s.statLabel}>EFFORT /10</div>
+              </div>
+              <div className={s.statTile}>
+                <div className={s.statNum}>
+                  {trail.rideTimeMin != null ? fmtTime(trail.rideTimeMin) : "–"}
+                </div>
+                <div className={s.statLabel}>EST TIME</div>
+              </div>
+            </div>
+
+            <div className={s.elevCard}>
+              <div className={s.elevHead}>
+                <span className={s.elevTitle}>ELEVATION</span>
+                <span className={s.elevMeta}>
+                  {ELEV_SOURCE_LABEL[trail.elevSource ?? ""] ?? "DEM"}
+                  {trail.metricLengthMi != null ? ` · ${trail.metricLengthMi} mi mapped` : ""}
+                </span>
+              </div>
+              {(() => {
+                const { polyline, area } = elevationPaths(trail.elevationProfile);
+                return (
+                  <svg viewBox="0 0 300 70" width="100%" height="58" preserveAspectRatio="none" style={{ display: "block" }}>
+                    <path d={area} fill="rgba(138,154,91,0.16)" stroke="none" />
+                    <polyline
+                      points={polyline}
+                      style={{ fill: "none", stroke: "var(--sage)", strokeWidth: 2.5, strokeLinejoin: "round", strokeLinecap: "round" }}
+                    />
+                  </svg>
+                );
+              })()}
+              <div className={s.elevStats}>
+                <div className={s.elevStatCell}>
+                  <div className={s.elevStatNum} style={{ color: "var(--success)" }}>
+                    ↑ {(trail.ascentFt ?? 0).toLocaleString()} ft
+                  </div>
+                  <div className={s.statLabel}>TOTAL CLIMB</div>
+                </div>
+                <div className={s.elevStatCell}>
+                  <div className={s.elevStatNum} style={{ color: "var(--terracotta)" }}>
+                    ↓ {(trail.descentFt ?? 0).toLocaleString()} ft
+                  </div>
+                  <div className={s.statLabel}>TOTAL DESCENT</div>
+                </div>
+                <div className={s.elevStatCell}>
+                  <div className={s.elevStatNum} style={{ color: "var(--ink)" }}>
+                    {trail.avgUpGrade ?? "–"}
+                  </div>
+                  <div className={s.statLabel}>AVG UP GRADE</div>
+                </div>
+                <div className={s.elevStatCell}>
+                  <div className={s.elevStatNum} style={{ color: "var(--ink)" }}>
+                    {trail.avgDownGrade ?? "–"}
+                  </div>
+                  <div className={s.statLabel}>AVG DOWN GRADE</div>
+                </div>
+              </div>
+            </div>
+          </>
         )}
 
         <div className={s.ebirdCard}>

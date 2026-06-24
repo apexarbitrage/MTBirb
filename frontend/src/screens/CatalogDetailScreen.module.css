@@ -32,6 +32,72 @@
   color: var(--text-muted);
 }
 
+/* Terrain metrics: stat grid + elevation card (mirrors the curated Trail-detail design). */
+.statGrid {
+  display: flex;
+  gap: 1px;
+  margin-top: 16px;
+  background: var(--card-tile-divider);
+  border-radius: var(--radius-tile);
+  overflow: hidden;
+}
+.statTile {
+  flex: 1;
+  background: var(--white);
+  padding: 12px 6px;
+  text-align: center;
+}
+.statNum {
+  font-size: 17px;
+  font-weight: 800;
+}
+.statLabel {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.elevCard {
+  margin-top: 16px;
+  background: var(--white);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 14px 15px;
+}
+.elevHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+.elevTitle {
+  color: var(--sage-text-deep);
+  font-weight: 700;
+}
+.elevMeta {
+  color: var(--terracotta);
+}
+.elevStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin-top: 14px;
+  background: var(--card-tile-divider);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.elevStatCell {
+  background: var(--sand-stat);
+  padding: 10px 12px;
+}
+.elevStatNum {
+  font-size: 15px;
+  font-weight: 800;
+}
+
 .ebirdCard {
   margin-top: 16px;
   background: var(--white);

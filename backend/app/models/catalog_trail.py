@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from geoalchemy2 import Geometry
-from sqlalchemy import DateTime, Float, String, func
+from sqlalchemy import JSON, DateTime, Float, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -37,4 +37,16 @@ class CatalogTrail(Base):
     line_geom: Mapped[str | None] = mapped_column(
         Geometry(geometry_type="LINESTRING", srid=4326), nullable=True
     )
+    # Terrain metrics derived from the line's DEM elevation profile (null until computed). Two
+    # tiers fill these: a fast Open-Meteo pass, refined to USGS 3DEP when a detail is opened.
+    # `elev_source` records which tier produced the current values. See services/trail_metrics.py.
+    metric_length_mi: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ascent_ft: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    descent_ft: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    avg_up_grade: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    avg_down_grade: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    elevation_profile: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
+    ride_time_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    effort: Mapped[float | None] = mapped_column(Float, nullable=True)
+    elev_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -61,9 +61,11 @@ backend over HTTP, proxied under `/api` in dev (see `frontend/vite.config.ts`).
   metadata) and `WildlifeSighting` (a cached species observation, currently eBird-sourced, with
   Point geometry).
 - `app/integrations/` - one client per third-party data source (`ebird.py`, `weather.py`,
-  `birdnet.py`). Each wraps a single external API; this is where new data sources get added.
-- `app/services/` - cross-cutting logic that doesn't belong to one model or one integration.
-  Currently just `wildlife_likelihood.py`.
+  `birdnet.py`, `osm.py`, `trailapi.py`, `elevation.py`). Each wraps a single external API; this
+  is where new data sources get added. `elevation.py` holds two interchangeable DEM clients
+  (`OpenMeteoElevation`, `UsgsElevation`) behind a common `lookup(points)`.
+- `app/services/` - cross-cutting logic that doesn't belong to one model or one integration
+  (`wildlife_likelihood.py`, `catalog_geometry.py`, `trail_metrics.py`, ...).
 - `app/routers/` - FastAPI route modules, included in `app/main.py`.
 
 ### Frontend structure
@@ -98,6 +100,37 @@ step, not an oversight.
 "highest chance of seeing an owl" probability - it doesn't yet account for eBird search effort
 (checklists per area), seasonality, or time of day. Treat this as the area needing the most
 design work, not as a finished feature to extend incrementally.
+
+### Trail terrain metrics are two-tier (Open-Meteo, then USGS)
+
+`app/services/trail_metrics.py` derives the design's elevation stats (total climb/descent,
+avg up/down grade, normalized profile, plus heuristic ride-time/effort) for a catalog trail by
+resampling its OSM line to a fixed number of points and looking up each point's DEM elevation.
+Two tiers fill the same columns: a fast batched **Open-Meteo** pass over many trails
+(`POST /catalog/compute-metrics`, ~90m DEM), then a higher-resolution **USGS 3DEP** refinement
+(~1m) computed per-trail when its detail is opened. `CatalogTrail.elev_source` records which tier
+produced the current values; the USGS pass is a no-op once a trail is already `usgs`. The coarse
+tier visibly over-reads climb on flat trails (Open-Meteo said Sawyer Camp gains 646 ft; USGS, 301)
+- that gap is the reason for the refinement.
+
+Metrics are only meaningful over a line that actually represents the trail, so two guards apply:
+a sub-metre **noise floor** when summing climb (DEM jitter otherwise inflates it), and a minimum
+**mapped length** (`_MIN_METRIC_LENGTH_M`) below which the line is treated as a fragment and
+metrics are skipped (`elev_source="too-short"`, columns nulled) rather than fabricated. The
+displayed length is `metric_length_mi` (the mapped extent), which can be shorter than TrailAPI's
+nominal `length_mi` - the UI labels the elevation card "N mi mapped" to be honest about this.
+
+### Reassembling full trails from OSM (catalog_geometry.py)
+
+OSM splits a trail into many same-named ways. `assemble_line` pulls every way matching the trail's
+name (a loose `_name_core` regex) across a length-sized bbox via `OverpassClient.fetch_named_ways`,
+then `stitch_ways` chains them from the trailhead into one ordered line - turning what used to be a
+single nearest-way fragment (e.g. 54 m of Sawyer Camp) into the real ~6 mi trail. It falls back to
+the old nearest-way match in a small radius when the named assembly comes up short. `ensure_line`
+/ `enrich_region` take `force=True` to re-assemble trails that already have an (older fragment)
+line; that clears `elev_source` so metrics recompute. Name mismatches (TrailAPI typos like
+"Purisma" vs OSM "Purisima") defeat the name filter and fall back to a fragment - those get caught
+by the mapped-length guard above, not silently shown.
 
 ### Geospatial query gotcha
 

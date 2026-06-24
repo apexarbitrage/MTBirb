@@ -18,6 +18,16 @@ export interface CatalogTrail {
   lat: number;
   lon: number;
   url: string | null;
+  // DEM-derived terrain metrics (null until computed by the backend; see trail_metrics.py).
+  metricLengthMi: number | null;
+  ascentFt: number | null;
+  descentFt: number | null;
+  avgUpGrade: string | null;
+  avgDownGrade: string | null;
+  elevationProfile: number[] | null;
+  rideTimeMin: number | null;
+  effort: number | null;
+  elevSource: string | null;
 }
 
 interface CatalogResponse {
