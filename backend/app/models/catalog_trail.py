@@ -32,4 +32,9 @@ class CatalogTrail(Base):
     lat: Mapped[float] = mapped_column(Float)
     lon: Mapped[float] = mapped_column(Float)
     geom: Mapped[str] = mapped_column(Geometry(geometry_type="POINT", srid=4326))
+    # Real ridable line from OSM, matched near the trailhead and filled in on demand
+    # (null until a detail view or the enrichment job fetches it). See services/catalog_geometry.py.
+    line_geom: Mapped[str | None] = mapped_column(
+        Geometry(geometry_type="LINESTRING", srid=4326), nullable=True
+    )
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

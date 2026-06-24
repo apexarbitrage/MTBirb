@@ -8,13 +8,16 @@ TrailAPI id (`external_id`).
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime, timedelta
+
 from geoalchemy2.elements import WKTElement
 from geoalchemy2.types import Geography
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.integrations.trailapi import TrailApiClient
-from app.models import CatalogTrail
+from app.models import CatalogTrail, WildlifeSighting
 
 
 def _safe_float(value: object) -> float | None:
@@ -111,3 +114,55 @@ def nearby_trails(
             .limit(limit)
         )
     )
+
+
+def sightings_near_count(db: Session, lat: float, lon: float, radius_km: float) -> int:
+    return db.scalar(
+        select(func.count())
+        .select_from(WildlifeSighting)
+        .where(func.ST_DWithin(func.cast(WildlifeSighting.geom, Geography), _point_geog(lat, lon), radius_km * 1000))
+    ) or 0
+
+
+def recent_species_near_catalog(
+    db: Session, catalog_id: int, buffer_m: float = 800, lookback_days: int = 14, limit: int = 8
+) -> list[dict]:
+    """Species recently reported to eBird near a catalog trail (its line if matched, else point)."""
+    geom = func.coalesce(CatalogTrail.line_geom, CatalogTrail.geom)
+    trail_geog = (
+        select(func.cast(geom, Geography)).where(CatalogTrail.id == catalog_id).scalar_subquery()
+    )
+    buffered = func.ST_Buffer(trail_geog, buffer_m)
+    cutoff = datetime.now(UTC) - timedelta(days=lookback_days)
+    rows = db.execute(
+        select(
+            WildlifeSighting.species_code,
+            WildlifeSighting.common_name,
+            func.count().label("observations"),
+            func.max(WildlifeSighting.observed_at).label("last_observed"),
+        )
+        .where(WildlifeSighting.observed_at >= cutoff)
+        .where(func.ST_Intersects(func.cast(WildlifeSighting.geom, Geography), buffered))
+        .group_by(WildlifeSighting.species_code, WildlifeSighting.common_name)
+        .order_by(func.count().desc(), func.max(WildlifeSighting.observed_at).desc())
+        .limit(limit)
+    ).all()
+    return [
+        {
+            "species_code": r.species_code,
+            "common_name": r.common_name,
+            "observations": r.observations,
+            "last_observed": r.last_observed,
+        }
+        for r in rows
+    ]
+
+
+def line_points(db: Session, catalog_id: int) -> list[list[float]] | None:
+    """The catalog trail's OSM line as [[lon, lat], ...], or None if it has no line yet."""
+    geojson = db.scalar(
+        select(func.ST_AsGeoJSON(CatalogTrail.line_geom)).where(CatalogTrail.id == catalog_id)
+    )
+    if not geojson:
+        return None
+    return json.loads(geojson)["coordinates"]
