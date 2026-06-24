@@ -59,6 +59,9 @@ def create_trip(body: TripCreate, db: Session = Depends(get_db)) -> TripOut:
         miles=body.miles,
         ridden_on=body.riddenOn or date.today(),
         birds=[{"species_code": b.speciesCode, "common_name": b.commonName} for b in body.birds],
+        photos=[
+            {"lat": p.lat, "lon": p.lon, "taken_at": p.takenAt, "thumb": p.thumb} for p in body.photos
+        ],
     )
     db.add(trip)
     db.commit()

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { logRide, type TripBird } from "../data/useTrips";
+import { readGeoPhoto, type GeoPhoto } from "../data/photo";
 
 interface SpeciesOption {
   speciesCode: string | null;
@@ -33,8 +34,21 @@ export function LogRideSheet({ trail, options, onClose, onLogged }: Props) {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [extra, setExtra] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
+  const [photos, setPhotos] = useState<GeoPhoto[]>([]);
+  const [reading, setReading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const addPhotos = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setReading(true);
+    try {
+      const read = await Promise.all(Array.from(files).map(readGeoPhoto));
+      setPhotos((prev) => [...prev, ...read.filter((p) => p.thumb)]);
+    } finally {
+      setReading(false);
+    }
+  };
 
   const toggle = (name: string) =>
     setChecked((prev) => {
@@ -69,6 +83,7 @@ export function LogRideSheet({ trail, options, onClose, onLogged }: Props) {
         miles: trail.miles,
         riddenOn: date,
         birds,
+        photos,
       });
       onLogged();
     } catch (e) {
@@ -126,6 +141,35 @@ export function LogRideSheet({ trail, options, onClose, onLogged }: Props) {
             Add
           </button>
         </div>
+
+        <label style={{ ...fieldLabel, marginTop: 16 }}>PHOTOS (mapped by GPS)</label>
+        <label style={uploadBtn}>
+          {reading ? "Reading…" : "＋ Add photos"}
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => addPhotos(e.target.files)}
+            style={{ display: "none" }}
+          />
+        </label>
+        {photos.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+            {photos.map((p, i) => (
+              <div key={i} style={{ position: "relative" }}>
+                <img src={p.thumb} alt="" style={thumbImg} />
+                <span style={gpsBadge(p.lat != null)}>{p.lat != null ? "📍" : "no GPS"}</span>
+                <button
+                  onClick={() => setPhotos((prev) => prev.filter((_, j) => j !== i))}
+                  style={removePhoto}
+                  aria-label="Remove photo"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {err && <div style={{ color: "var(--terracotta)", fontSize: 13, marginTop: 12 }}>{err}</div>}
 
@@ -200,6 +244,49 @@ const addBtn: React.CSSProperties = {
   background: "var(--sage)",
   color: "#fff",
   cursor: "pointer",
+};
+const uploadBtn: React.CSSProperties = {
+  display: "inline-block",
+  padding: "9px 14px",
+  borderRadius: 10,
+  border: "1px dashed var(--sage)",
+  color: "var(--sage-text-deep)",
+  fontWeight: 700,
+  fontSize: 13,
+  cursor: "pointer",
+};
+const thumbImg: React.CSSProperties = {
+  width: 64,
+  height: 64,
+  objectFit: "cover",
+  borderRadius: 10,
+  display: "block",
+};
+const gpsBadge = (hasGps: boolean): React.CSSProperties => ({
+  position: "absolute",
+  left: 3,
+  bottom: 3,
+  fontSize: 9,
+  fontWeight: 700,
+  padding: "1px 4px",
+  borderRadius: 5,
+  background: hasGps ? "rgba(33,48,42,0.7)" : "var(--terracotta)",
+  color: "#fff",
+});
+const removePhoto: React.CSSProperties = {
+  position: "absolute",
+  top: -6,
+  right: -6,
+  width: 18,
+  height: 18,
+  borderRadius: "50%",
+  border: "none",
+  background: "var(--ink)",
+  color: "#fff",
+  fontSize: 10,
+  cursor: "pointer",
+  lineHeight: "18px",
+  padding: 0,
 };
 const cancelBtn: React.CSSProperties = {
   flex: "none",

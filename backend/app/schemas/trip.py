@@ -14,6 +14,13 @@ class TripBird(BaseModel):
     commonName: str
 
 
+class TripPhoto(BaseModel):
+    lat: float | None = None
+    lon: float | None = None
+    takenAt: str | None = None
+    thumb: str  # downscaled data-URL (the full image isn't stored)
+
+
 class TripCreate(BaseModel):
     trailExternalId: str | None = None
     trailName: str
@@ -21,6 +28,7 @@ class TripCreate(BaseModel):
     miles: float | None = None
     riddenOn: date | None = None  # defaults to today on the server
     birds: list[TripBird] = Field(default_factory=list)
+    photos: list[TripPhoto] = Field(default_factory=list)
 
 
 class TripOut(BaseModel):
@@ -31,6 +39,7 @@ class TripOut(BaseModel):
     miles: float | None
     riddenOn: date
     birds: list[TripBird]
+    photos: list[TripPhoto]
     lifers: int
     createdAt: datetime
 
@@ -44,6 +53,10 @@ class TripOut(BaseModel):
             miles=t.miles,
             riddenOn=t.ridden_on,
             birds=[TripBird(speciesCode=b.get("species_code"), commonName=b.get("common_name", "")) for b in (t.birds or [])],
+            photos=[
+                TripPhoto(lat=p.get("lat"), lon=p.get("lon"), takenAt=p.get("taken_at"), thumb=p.get("thumb", ""))
+                for p in (t.photos or [])
+            ],
             lifers=lifers,
             createdAt=t.created_at,
         )

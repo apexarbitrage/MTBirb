@@ -6,7 +6,9 @@ import { ScoreRing } from "../components/ScoreRing";
 import { Photo } from "../components/Photo";
 import { CenterMessage } from "../components/CenterMessage";
 import { LogRideSheet } from "../components/LogRideSheet";
+import { TrailPhotoMap } from "../components/TrailPhotoMap";
 import { useCatalogDetail } from "../data/useCatalogDetail";
+import { useTrips } from "../data/useTrips";
 import { shortSky } from "../data/useTrailWeather";
 import { TRAIL_HERO_IMG, fmtTime, normalizeDifficulty } from "../data/trails";
 import { useAppState } from "../state/AppState";
@@ -24,7 +26,9 @@ const ELEV_SOURCE_LABEL: Record<string, string> = { usgs: "USGS 3DEP", "open-met
 export function TrailDetailScreen() {
   const navigate = useNavigate();
   const { detailTrailId, setDetailTrailId } = useAppState();
-  const { trail, error, loading, species, areaRadiusKm, weather } = useCatalogDetail(detailTrailId);
+  const { trail, linePoints, error, loading, species, areaRadiusKm, weather } =
+    useCatalogDetail(detailTrailId);
+  const { trips } = useTrips();
   const [showLog, setShowLog] = useState(false);
 
   if (loading || error || !trail) {
@@ -49,6 +53,12 @@ export function TrailDetailScreen() {
   const profile = trail.elevationProfile ?? [];
   const hasElevation = profile.length > 1;
   const { polyline, area } = elevationPaths(profile);
+
+  // Your logged photos on this trail that carry GPS, for the map overlay.
+  const myPhotos = trips
+    .filter((t) => t.trailExternalId === trail.id)
+    .flatMap((t) => t.photos)
+    .filter((p): p is typeof p & { lat: number; lon: number } => p.lat != null && p.lon != null);
 
   return (
     <div className={s.screen}>
@@ -219,6 +229,18 @@ export function TrailDetailScreen() {
               </div>
             )}
           </div>
+
+          {myPhotos.length > 0 && linePoints && linePoints.length > 1 && (
+            <div className={s.elevCard}>
+              <div className={s.elevHead}>
+                <span style={{ color: "var(--sage)" }}>YOUR PHOTOS ON THIS TRAIL</span>
+                <span style={{ color: "var(--text-placeholder)" }}>
+                  {myPhotos.length} mapped by GPS
+                </span>
+              </div>
+              <TrailPhotoMap line={linePoints} photos={myPhotos} />
+            </div>
+          )}
         </div>
       </div>
 

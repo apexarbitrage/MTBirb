@@ -11,6 +11,13 @@ export interface TripBird {
   commonName: string;
 }
 
+export interface TripPhoto {
+  lat: number | null;
+  lon: number | null;
+  takenAt: string | null;
+  thumb: string;
+}
+
 export interface Trip {
   id: number;
   trailExternalId: string | null;
@@ -19,6 +26,7 @@ export interface Trip {
   miles: number | null;
   riddenOn: string;
   birds: TripBird[];
+  photos: TripPhoto[];
   lifers: number;
   createdAt: string;
 }
@@ -36,6 +44,7 @@ export interface LogRidePayload {
   miles?: number | null;
   riddenOn?: string;
   birds: TripBird[];
+  photos: TripPhoto[];
 }
 
 interface TripsResponse {

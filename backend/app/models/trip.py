@@ -24,4 +24,8 @@ class Trip(Base):
     miles: Mapped[float | None] = mapped_column(Float, nullable=True)
     ridden_on: Mapped[date] = mapped_column(Date)
     birds: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    # Geotagged photos: {"lat","lon","taken_at","thumb"} where thumb is a downscaled data-URL.
+    # We keep only the thumbnail + its GPS (read from the photo's EXIF), not the full image, so
+    # photos can be mapped onto the trail without a blob store. Coords may be null (no EXIF GPS).
+    photos: Mapped[list[dict]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

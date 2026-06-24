@@ -74,6 +74,34 @@ export function TripsScreen() {
                     ))}
                   </div>
                 )}
+                {tr.photos.length > 0 && (
+                  <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+                    {tr.photos.map((p, i) => (
+                      <div key={i} style={{ position: "relative" }}>
+                        <img
+                          src={p.thumb}
+                          alt=""
+                          style={{ width: 56, height: 56, objectFit: "cover", borderRadius: 8, display: "block" }}
+                        />
+                        {p.lat != null && (
+                          <span
+                            style={{
+                              position: "absolute",
+                              left: 2,
+                              bottom: 2,
+                              fontSize: 9,
+                              background: "rgba(33,48,42,0.7)",
+                              borderRadius: 4,
+                              padding: "0 3px",
+                            }}
+                          >
+                            📍
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
