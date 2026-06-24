@@ -1,0 +1,78 @@
+.backRow {
+  margin-bottom: 10px;
+}
+
+.chipRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  overflow-x: auto;
+}
+
+.chip {
+  flex: none;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chip:active {
+  opacity: 0.7;
+}
+.chipActive {
+  background: var(--terracotta);
+  color: #fff;
+}
+.chipIdle {
+  background: var(--white);
+  color: #4a5248;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.count {
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.note {
+  margin-top: 22px;
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.list {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card {
+  display: block;
+  background: var(--white);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 13px 15px;
+  text-decoration: none;
+  color: inherit;
+}
+.card:active {
+  background: var(--sand-warm);
+}
+
+.name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.meta {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-top: 6px;
+}

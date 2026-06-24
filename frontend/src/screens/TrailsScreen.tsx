@@ -59,7 +59,12 @@ export function TrailsScreen() {
     <div className={common.screen}>
       <div className={s.header}>
         <div className={common.eyebrow}>Bellingham, WA · {countLabel}</div>
-        <div className={common.title}>All trails</div>
+        <div className={s.titleRow}>
+          <div className={common.title}>All trails</div>
+          <button className={s.browseLink} onClick={() => navigate("/catalog")}>
+            Browse catalog →
+          </button>
+        </div>
 
         {filterEntry && (
           <div className={s.filterBanner}>

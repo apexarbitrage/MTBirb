@@ -46,6 +46,12 @@ def test_empty_difficulty_and_length_become_none() -> None:
     assert c.length_mi is None
 
 
+def test_no_name_placeholder_is_normalized() -> None:
+    assert record_to_catalog({**RECORD, "name": "no name"}).name == "Unnamed trail"
+    assert record_to_catalog({**RECORD, "name": ""}).name == "Unnamed trail"
+    assert record_to_catalog({**RECORD, "name": "Mrazek"}).name == "Mrazek"
+
+
 def test_safe_float() -> None:
     assert _safe_float("1.0") == 1.0
     assert _safe_float(2) == 2.0

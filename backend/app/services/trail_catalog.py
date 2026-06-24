@@ -30,10 +30,13 @@ def record_to_catalog(rec: dict) -> CatalogTrail | None:
     lat, lon = _safe_float(rec.get("lat")), _safe_float(rec.get("lon"))
     if not ext_id or lat is None or lon is None:
         return None
+    name = (rec.get("name") or "").strip()
+    if not name or name.lower() == "no name":  # TrailAPI uses the literal string "no name"
+        name = "Unnamed trail"
     return CatalogTrail(
         source="trailapi",
         external_id=str(ext_id),
-        name=(rec.get("name") or "Unnamed trail")[:200],
+        name=name[:200],
         difficulty=(rec.get("difficulty") or None),
         length_mi=_safe_float(rec.get("length")),
         city=rec.get("city"),
