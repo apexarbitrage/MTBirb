@@ -25,6 +25,7 @@ from app.services.trail_catalog import (
     sightings_near_count,
 )
 from app.services.trail_metrics import bulk_compute_metrics, ensure_metrics
+from app.services.wildlife_likelihood import score_catalog_trails
 from app.services.wildlife_sync import sync_recent_observations
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
@@ -50,6 +51,7 @@ async def list_catalog_trails(
     lon: float = Query(..., ge=-180, le=180),
     radius_km: float = Query(40, ge=1, le=160),
     limit: int = Query(50, ge=1, le=200),
+    lookback_days: int = Query(30, ge=1, le=60),
     db: Session = Depends(get_db),
 ) -> dict:
     fetched_now = 0
@@ -57,11 +59,24 @@ async def list_catalog_trails(
         # TrailAPI radius is in miles; cap at its useful range.
         fetched_now = await cache_trails_near(db, lat, lon, radius=min(int(radius_km * 0.62) + 1, 100))
 
+    # The first-pass wildlife score reads cached sightings; sync the area once if it's sparse so
+    # newly-browsed regions aren't scored against an empty cache.
+    synced_now = 0
+    if sightings_near_count(db, lat, lon, radius_km=15) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
+        synced_now = await sync_recent_observations(db, lat, lon, dist_km=15, back_days=lookback_days)
+
     trails = nearby_trails(db, lat, lon, radius_km, limit)
+    scores = score_catalog_trails(
+        db, [t.id for t in trails], buffer_m=_AREA_BUFFER_M, lookback_days=lookback_days
+    )
     return {
         "count": len(trails),
         "fetchedNow": fetched_now,
-        "trails": [CatalogTrailOut.from_model(t) for t in trails],
+        "syncedNow": synced_now,
+        "trails": [
+            CatalogTrailOut.from_model(t, scores.get(t.id), lookback_days=lookback_days)
+            for t in trails
+        ],
     }
 
 
@@ -78,7 +93,11 @@ async def get_catalog_trail(external_id: str, db: Session = Depends(get_db)) -> 
         await ensure_metrics(db, trail, UsgsElevation())
     except Exception:  # noqa: BLE001 - keep any existing (Open-Meteo) metrics on DEM failure
         pass
-    return {"trail": CatalogTrailOut.from_model(trail), "linePoints": line_points(db, trail.id)}
+    score = score_catalog_trails(db, [trail.id], buffer_m=_AREA_BUFFER_M).get(trail.id)
+    return {
+        "trail": CatalogTrailOut.from_model(trail, score, with_factors=True),
+        "linePoints": line_points(db, trail.id),
+    }
 
 
 @router.get("/trails/{external_id}/wildlife")

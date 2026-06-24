@@ -6,13 +6,19 @@ day, which is exactly the modeling work flagged as needing the most design time 
 becomes the "highest chance of seeing an owl" feature described in the product plan.
 """
 
+import math
 from datetime import UTC, datetime, timedelta
 
 from geoalchemy2.types import Geography
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
-from app.models import Trail, WildlifeSighting
+from app.models import CatalogTrail, Trail, WildlifeSighting
+
+# Species-richness saturation constant for the first-pass score: score = 100*(1-e^(-n/K)).
+# Tuned so the realistic 8 km richness range (~15-65 species) spreads across ~40-90.
+_SCORE_SATURATION = 28.0
+_MAX_SCORE = 98
 
 
 def score_trail_for_species(
@@ -94,3 +100,73 @@ def recent_species_near_trail(
         }
         for r in rows
     ]
+
+
+def _score_from_richness(species_count: int) -> int:
+    """A saturating 0..MAX score from the number of distinct species reported nearby."""
+    if species_count <= 0:
+        return 0
+    return min(_MAX_SCORE, round(100 * (1 - math.exp(-species_count / _SCORE_SATURATION))))
+
+
+def score_catalog_trails(
+    db: Session,
+    trail_ids: list[int],
+    buffer_m: float = 8000,
+    lookback_days: int = 30,
+) -> dict[int, dict]:
+    """First-pass wildlife-activity score for many catalog trails, from cached sightings.
+
+    For each trail, counts the distinct species reported to eBird within `buffer_m` of its
+    geometry (line if matched, else trailhead point) in the lookback window, and turns that
+    richness into a saturating 0..98 score. This is a relative, area-level proxy - the same
+    raw-signal caveat as the rest of this module - not a calibrated probability. One spatial
+    join feeds all the trails; aggregation/ranking happens in Python. Returns, per trail id:
+    `score`, `species_count`, and `top_species` (most-recent first).
+    """
+    if not trail_ids:
+        return {}
+    cutoff = datetime.now(UTC) - timedelta(days=lookback_days)
+    trail_geog = func.cast(func.coalesce(CatalogTrail.line_geom, CatalogTrail.geom), Geography)
+    sight_geog = func.cast(WildlifeSighting.geom, Geography)
+    rows = db.execute(
+        select(
+            CatalogTrail.id,
+            WildlifeSighting.species_code,
+            WildlifeSighting.common_name,
+            WildlifeSighting.observed_at,
+        )
+        .join(
+            WildlifeSighting,
+            and_(
+                func.ST_DWithin(trail_geog, sight_geog, buffer_m),
+                WildlifeSighting.observed_at >= cutoff,
+            ),
+            isouter=True,
+        )
+        .where(CatalogTrail.id.in_(trail_ids))
+    ).all()
+
+    # Per trail, keep the most recent observation of each species.
+    _floor = datetime.min.replace(tzinfo=UTC)
+    per: dict[int, dict[str, tuple[str, datetime | None]]] = {tid: {} for tid in trail_ids}
+    for tid, code, name, observed_at in rows:
+        if code is None:  # outer-join row for a trail with no nearby sightings
+            continue
+        existing = per[tid].get(code)
+        if existing is None or (observed_at or _floor) > (existing[1] or _floor):
+            per[tid][code] = (name, observed_at)
+
+    result: dict[int, dict] = {}
+    for tid in trail_ids:
+        species = per[tid]
+        top = sorted(species.items(), key=lambda kv: kv[1][1] or _floor, reverse=True)
+        result[tid] = {
+            "score": _score_from_richness(len(species)),
+            "species_count": len(species),
+            "top_species": [
+                {"species_code": code, "common_name": name, "last_observed": observed_at}
+                for code, (name, observed_at) in top
+            ],
+        }
+    return result
