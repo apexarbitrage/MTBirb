@@ -48,3 +48,49 @@ def score_trail_for_species(
         "buffer_m": buffer_m,
         "lookback_days": lookback_days,
     }
+
+
+def recent_species_near_trail(
+    db: Session,
+    trail_id: int,
+    buffer_m: float = 750,
+    lookback_days: int = 14,
+    limit: int = 8,
+) -> list[dict]:
+    """Species recently reported to eBird near a trail, ranked by observation count.
+
+    Honest raw signal (counts of cached sightings within a buffer), not a calibrated
+    probability - the same caveat as score_trail_for_species applies.
+    """
+    if db.scalar(select(Trail.id).where(Trail.id == trail_id)) is None:
+        raise ValueError(f"no trail with id {trail_id}")
+
+    cutoff = datetime.now(UTC) - timedelta(days=lookback_days)
+    trail_geog = (
+        select(func.cast(Trail.geom, Geography)).where(Trail.id == trail_id).scalar_subquery()
+    )
+    buffered = func.ST_Buffer(trail_geog, buffer_m)
+
+    rows = db.execute(
+        select(
+            WildlifeSighting.species_code,
+            WildlifeSighting.common_name,
+            func.count().label("observations"),
+            func.max(WildlifeSighting.observed_at).label("last_observed"),
+        )
+        .where(WildlifeSighting.observed_at >= cutoff)
+        .where(func.ST_Intersects(func.cast(WildlifeSighting.geom, Geography), buffered))
+        .group_by(WildlifeSighting.species_code, WildlifeSighting.common_name)
+        .order_by(func.count().desc(), func.max(WildlifeSighting.observed_at).desc())
+        .limit(limit)
+    ).all()
+
+    return [
+        {
+            "species_code": r.species_code,
+            "common_name": r.common_name,
+            "observations": r.observations,
+            "last_observed": r.last_observed,
+        }
+        for r in rows
+    ]
