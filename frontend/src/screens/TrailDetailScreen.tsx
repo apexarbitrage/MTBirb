@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BackButton } from "../components/BackButton";
 import { BirdIdFab } from "../components/BirdIdFab";
 import { ScoreRing } from "../components/ScoreRing";
 import { Photo } from "../components/Photo";
 import { CenterMessage } from "../components/CenterMessage";
+import { LogRideSheet } from "../components/LogRideSheet";
 import { useCatalogDetail } from "../data/useCatalogDetail";
 import { shortSky } from "../data/useTrailWeather";
 import { TRAIL_HERO_IMG, fmtTime, normalizeDifficulty } from "../data/trails";
@@ -23,6 +25,7 @@ export function TrailDetailScreen() {
   const navigate = useNavigate();
   const { detailTrailId, setDetailTrailId } = useAppState();
   const { trail, error, loading, species, areaRadiusKm, weather } = useCatalogDetail(detailTrailId);
+  const [showLog, setShowLog] = useState(false);
 
   if (loading || error || !trail) {
     return (
@@ -105,6 +108,24 @@ export function TrailDetailScreen() {
               <div className={s.statLabel}>EST TIME</div>
             </button>
           </div>
+
+          <button
+            onClick={() => setShowLog(true)}
+            style={{
+              width: "100%",
+              marginTop: 14,
+              padding: "13px",
+              borderRadius: 12,
+              border: "1.5px solid var(--terracotta)",
+              background: "var(--terracotta-tint)",
+              color: "var(--terracotta)",
+              fontWeight: 800,
+              fontSize: 15,
+              cursor: "pointer",
+            }}
+          >
+            ＋ Log this ride
+          </button>
 
           {/* Elevation (only when a mapped line produced a profile) */}
           {hasElevation && (
@@ -213,6 +234,22 @@ export function TrailDetailScreen() {
           Navigate to trailhead →
         </button>
       </div>
+
+      {showLog && (
+        <LogRideSheet
+          trail={{ id: trail.id, name: trail.name, difficulty: trail.difficulty, miles }}
+          options={[
+            ...(species ?? []).map((sp) => ({ speciesCode: sp.species_code, commonName: sp.common_name })),
+            ...trail.notableBirds.map((n) => ({ speciesCode: null, commonName: n })),
+            ...trail.likelyBirds.map((n) => ({ speciesCode: null, commonName: n })),
+          ]}
+          onClose={() => setShowLog(false)}
+          onLogged={() => {
+            setShowLog(false);
+            navigate("/trips");
+          }}
+        />
+      )}
     </div>
   );
 }
