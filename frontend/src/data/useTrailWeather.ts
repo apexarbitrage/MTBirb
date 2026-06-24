@@ -1,7 +1,7 @@
 /*
- * Fetches the live NWS forecast for a trail (GET /api/trails/{slug}/weather) and exposes the
- * current period. Fails soft: on error it resolves to an empty list so callers fall back to
- * their seeded values. `current` is null while the request for the current slug is in flight.
+ * Fetches the live NWS forecast for a catalog trail (GET /api/catalog/trails/{id}/weather) and
+ * exposes the current period. Fails soft: on error it resolves to an empty list so callers fall
+ * back gracefully. `current` is null while the request for the current id is in flight.
  */
 
 import { useEffect, useState } from "react";
@@ -19,7 +19,6 @@ export interface WeatherPeriod {
 
 interface WeatherResponse {
   trail: string;
-  point: { lat: number; lon: number };
   periods: WeatherPeriod[];
 }
 
@@ -29,7 +28,7 @@ export function useTrailWeather(slug: string | undefined) {
   useEffect(() => {
     if (!slug) return;
     const controller = new AbortController();
-    apiGet<WeatherResponse>(`/trails/${slug}/weather`, controller.signal)
+    apiGet<WeatherResponse>(`/catalog/trails/${slug}/weather`, controller.signal)
       .then((d) => {
         if (!controller.signal.aborted) setLoaded({ slug, periods: d.periods });
       })

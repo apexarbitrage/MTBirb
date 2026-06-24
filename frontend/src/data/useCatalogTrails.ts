@@ -7,6 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { apiGet } from "../api/client";
+import { normalizeDifficulty, type SightingFactor, type Trail } from "./trails";
 
 export interface CatalogTrail {
   id: string;
@@ -28,6 +29,53 @@ export interface CatalogTrail {
   rideTimeMin: number | null;
   effort: number | null;
   elevSource: string | null;
+  // First-pass wildlife overlay (recency + seasonality + notable; see wildlife_likelihood.py).
+  score: number | null;
+  notableScore: number | null;
+  likelyBirds: string[];
+  notableBirds: string[];
+  metaBird: string | null;
+  peak: string | null;
+  sightingHeadline: string | null;
+  factors: SightingFactor[];
+}
+
+/** Adapt a live catalog trail into the shared `Trail` shape the screens render. */
+export function catalogToTrail(c: CatalogTrail): Trail {
+  const location = [c.city, c.region].filter(Boolean).join(", ");
+  return {
+    id: c.id,
+    name: c.name,
+    score: c.score ?? 0,
+    notableScore: c.notableScore,
+    diff: normalizeDifficulty(c.difficulty),
+    miles: c.metricLengthMi ?? c.lengthMi,
+    effort: c.effort,
+    // weather / best-time aren't in the list response - fetched live per-trail or still deferred.
+    window: null,
+    realfeel: null,
+    sky: null,
+    condition: null,
+    peak: c.peak,
+    metaTime: null,
+    metaBird: c.metaBird,
+    features: [],
+    rideTime: c.rideTimeMin,
+    likelyBirds: c.likelyBirds ?? [],
+    notableBirds: c.notableBirds ?? [],
+    location: location || null,
+    gainFt: c.ascentFt,
+    dirt: null,
+    climbFt: c.ascentFt,
+    descentFt: c.descentFt,
+    avgUpGrade: c.avgUpGrade,
+    avgDownGrade: c.avgDownGrade,
+    elevation: c.elevationProfile ?? [],
+    sightingHeadline: c.sightingHeadline,
+    factors: c.factors ?? [],
+    bestWindow: null,
+    bestWindowWhy: null,
+  };
 }
 
 interface CatalogResponse {

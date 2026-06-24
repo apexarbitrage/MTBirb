@@ -53,9 +53,9 @@ export function DiscoverScreen() {
 
   const rest = trails.filter((t) => t.id !== sel.id).sort((a, b) =>
     discoverSort === "distance"
-      ? a.miles - b.miles
+      ? (a.miles ?? 0) - (b.miles ?? 0)
       : discoverSort === "effort"
-        ? a.effort - b.effort
+        ? (a.effort ?? 0) - (b.effort ?? 0)
         : b.score - a.score,
   );
 
@@ -111,7 +111,7 @@ export function DiscoverScreen() {
                   navigate("/optimal-time");
                 }}
               >
-                {sel.window}
+                {sel.window ?? sel.sightingHeadline ?? "Find the best time to ride →"}
               </button>
             </div>
           </div>
@@ -120,10 +120,10 @@ export function DiscoverScreen() {
           <div className={s.weatherStrip}>
             <div className={s.weatherCell}>
               <div style={{ height: 19, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <DifficultyMarker diff={sel.diff} size={13} onDark />
+                {sel.diff && <DifficultyMarker diff={sel.diff} size={13} onDark />}
               </div>
               <div className={s.weatherLabel} style={{ marginTop: 2 }}>
-                {sel.diff.toUpperCase()}
+                {(sel.diff ?? "Unrated").toUpperCase()}
               </div>
             </div>
             <div className={s.weatherCell}>
@@ -136,9 +136,9 @@ export function DiscoverScreen() {
             </div>
             <div className={s.weatherCell}>
               <div className={s.weatherValue} style={{ color: "var(--terracotta)" }}>
-                {sel.condition}
+                {sel.condition ?? (wx ? wx.windSpeed : "—")}
               </div>
-              <div className={s.weatherLabel}>CONDITION</div>
+              <div className={s.weatherLabel}>{sel.condition ? "CONDITION" : "WIND"}</div>
             </div>
           </div>
 
@@ -146,7 +146,8 @@ export function DiscoverScreen() {
           <div className={s.peakRow}>
             <BirdGlyph fill="var(--terracotta)" eyeFill="var(--forest)" size={24} />
             <div className={s.peakText}>
-              <span style={{ fontWeight: 700 }}>Peak odds:</span> {sel.peak}
+              <span style={{ fontWeight: 700 }}>Notable nearby:</span>{" "}
+              {sel.peak ?? "No notable reports recently"}
             </div>
           </div>
 
@@ -177,11 +178,13 @@ export function DiscoverScreen() {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  <DifficultyMarker diff={t.diff} size={10} />
+                  {t.diff && <DifficultyMarker diff={t.diff} size={10} />}
                   <div className={s.rowName}>{t.name}</div>
                 </div>
                 <div className={common.monoMeta}>
-                  {t.miles} mi · {t.metaTime} · {t.metaBird}
+                  {[t.miles != null ? `${t.miles} mi` : null, t.metaBird]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </div>
               </div>
               <div

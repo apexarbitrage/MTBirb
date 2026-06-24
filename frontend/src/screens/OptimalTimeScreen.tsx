@@ -73,8 +73,11 @@ export function OptimalTimeScreen() {
 
         <div className={s.recCard}>
           <div className={s.recLabel}>RECOMMENDED WINDOW</div>
-          <div className={s.recWindow}>{t.bestWindow}</div>
-          <div className={s.recWhy}>{t.bestWindowWhy}</div>
+          <div className={s.recWindow}>{t.bestWindow ?? "Dawn & dusk"}</div>
+          <div className={s.recWhy}>
+            {t.bestWindowWhy ??
+              "A calibrated best-time model (hourly weather + activity) is on the way; the curve below is illustrative."}
+          </div>
         </div>
 
         <div className={s.curveCard}>

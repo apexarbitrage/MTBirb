@@ -1,7 +1,8 @@
 /*
- * Loads trails from the backend once and shares them across screens. This is what replaced
- * the former static `TRAILS` array: Discover, Trails, Trail detail, and Optimal time all read
- * from here, so they run on backend-served data over HTTP.
+ * Loads trails from the live catalog near the user's location and shares them across screens.
+ * Discover, Trails, and Optimal time read from here. Each catalog trail is adapted to the shared
+ * `Trail` shape (catalogToTrail), carrying the recency/season/notable wildlife score; the rich
+ * Trail-detail screen fetches its own enriched detail separately (useCatalogDetail).
  */
 
 import {
@@ -14,11 +15,19 @@ import {
   type ReactNode,
 } from "react";
 import { apiGet } from "../api/client";
+import { catalogToTrail, type CatalogTrail } from "./useCatalogTrails";
+import { useGeolocation, type AppLocation } from "./useGeolocation";
 import type { Trail } from "./trails";
+
+interface CatalogResponse {
+  count: number;
+  trails: CatalogTrail[];
+}
 
 interface TrailsState {
   trails: Trail[];
   byId: (id: string) => Trail | undefined;
+  location: AppLocation;
   loading: boolean;
   error: string | null;
   reload: () => void;
@@ -27,11 +36,10 @@ interface TrailsState {
 const TrailsContext = createContext<TrailsState | null>(null);
 
 export function TrailsProvider({ children }: { children: ReactNode }) {
+  const location = useGeolocation();
   const [trails, setTrails] = useState<Trail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Bumped to re-run the fetch effect. State is reset here (a user/event callback), not in
-  // the effect body, so we never call setState synchronously inside the effect.
   const [reloadKey, setReloadKey] = useState(0);
 
   const reload = useCallback(() => {
@@ -40,11 +48,15 @@ export function TrailsProvider({ children }: { children: ReactNode }) {
     setReloadKey((k) => k + 1);
   }, []);
 
+  const { lat, lon } = location;
   useEffect(() => {
     const controller = new AbortController();
-    apiGet<Trail[]>("/trails", controller.signal)
+    apiGet<CatalogResponse>(
+      `/catalog/trails?lat=${lat}&lon=${lon}&radius_km=60&limit=60`,
+      controller.signal,
+    )
       .then((data) => {
-        setTrails(data);
+        setTrails(data.trails.map(catalogToTrail));
         setError(null);
       })
       .catch((e) => {
@@ -55,17 +67,18 @@ export function TrailsProvider({ children }: { children: ReactNode }) {
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [reloadKey]);
+  }, [lat, lon, reloadKey]);
 
   const value = useMemo<TrailsState>(
     () => ({
       trails,
       byId: (id) => trails.find((t) => t.id === id),
+      location,
       loading,
       error,
       reload,
     }),
-    [trails, loading, error, reload],
+    [trails, location, loading, error, reload],
   );
 
   return <TrailsContext.Provider value={value}>{children}</TrailsContext.Provider>;

@@ -7,7 +7,6 @@ import { useTrails } from "../data/TrailsProvider";
 import {
   TRAIL_SORT_CHIPS,
   TRAIL_SORT_LABELS,
-  TOTAL_TRAILS_NEARBY,
   compareTrails,
   fmtTime,
   scoreChipBg,
@@ -20,7 +19,7 @@ import s from "./TrailsScreen.module.css";
 
 export function TrailsScreen() {
   const navigate = useNavigate();
-  const { trails, loading, error, reload } = useTrails();
+  const { trails, location, loading, error, reload } = useTrails();
   const { trailSort, trailDir, pickTrailSort, trailFilter, setTrailFilter, setDetailTrailId } =
     useAppState();
 
@@ -46,9 +45,7 @@ export function TrailsScreen() {
   const display = filterEntry ? sorted.filter((t) => filterEntry.trails.includes(t.id)) : sorted;
 
   const arrow = trailDir === "asc" ? "↑" : "↓";
-  const countLabel = filterEntry
-    ? `${display.length} trail${display.length === 1 ? "" : "s"}`
-    : `${TOTAL_TRAILS_NEARBY} trails`;
+  const countLabel = `${display.length} trail${display.length === 1 ? "" : "s"}`;
 
   const open = (id: string) => {
     setDetailTrailId(id);
@@ -58,12 +55,9 @@ export function TrailsScreen() {
   return (
     <div className={common.screen}>
       <div className={s.header}>
-        <div className={common.eyebrow}>Bellingham, WA · {countLabel}</div>
+        <div className={common.eyebrow}>{location.label} · {countLabel}</div>
         <div className={s.titleRow}>
           <div className={common.title}>All trails</div>
-          <button className={s.browseLink} onClick={() => navigate("/catalog")}>
-            Browse catalog →
-          </button>
         </div>
 
         {filterEntry && (
@@ -106,7 +100,7 @@ export function TrailsScreen() {
         {display.map((t) => (
           <button key={t.id} className={s.trailCard} onClick={() => open(t.id)}>
             <div className={s.cardTop}>
-              <DifficultyMarker diff={t.diff} size={11} />
+              {t.diff && <DifficultyMarker diff={t.diff} size={11} />}
               <div className={s.trailName}>{t.name}</div>
               <div
                 className={t.score >= 85 ? common.scoreChipHi : common.scoreChipMed}
@@ -116,9 +110,15 @@ export function TrailsScreen() {
               </div>
             </div>
             <div className={s.cardMeta}>
-              {t.miles} mi · {fmtTime(t.rideTime)} · E{t.effort} · {t.diff}
+              {[
+                t.miles != null ? `${t.miles} mi` : null,
+                t.rideTime != null ? fmtTime(t.rideTime) : null,
+                t.effort != null ? `E${t.effort}` : null,
+                t.diff,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
             </div>
-            <div className={s.cardFeatures}>{t.features.join("  ·  ")}</div>
             <div className={s.birdRow}>
               <BirdGlyph fill="var(--terracotta)" eyeFill="#fff" size={16} />
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>

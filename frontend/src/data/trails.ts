@@ -20,38 +20,64 @@ export interface SightingFactor {
   tone: "terracotta" | "sage";
 }
 
+/*
+ * The shared trail shape the screens render. It now comes from the live catalog
+ * (`catalogToTrail` in useCatalogTrails.ts), so fields the catalog can't supply yet are
+ * nullable: weather/best-time (fetched live per-trail or deferred) and terrain metrics that
+ * only exist once a trail's OSM line has been enriched. `score` is the recency+season+notable
+ * wildlife activity score; `notableScore` is the "odds of something unusual" axis.
+ */
 export interface Trail {
   id: string;
   name: string;
   score: number;
-  diff: Difficulty;
-  miles: number;
-  effort: number;
-  window: string;
-  realfeel: string;
-  sky: string;
-  condition: string;
-  peak: string;
-  metaTime: string;
-  metaBird: string;
+  notableScore: number | null;
+  diff: Difficulty | null;
+  miles: number | null;
+  effort: number | null;
+  window: string | null;
+  realfeel: string | null;
+  sky: string | null;
+  condition: string | null;
+  peak: string | null;
+  metaTime: string | null;
+  metaBird: string | null;
   // extras (Trails list)
   features: string[];
-  rideTime: number; // minutes
+  rideTime: number | null; // minutes
   likelyBirds: string[];
+  notableBirds: string[];
   // detail screen
-  location: string;
-  gainFt: number;
-  dirt: string;
-  climbFt: number;
-  descentFt: number;
-  avgUpGrade: string;
-  avgDownGrade: string;
+  location: string | null;
+  gainFt: number | null;
+  dirt: string | null;
+  climbFt: number | null;
+  descentFt: number | null;
+  avgUpGrade: string | null;
+  avgDownGrade: string | null;
   elevation: number[]; // normalized 0..1 sample points, left→right
-  sightingHeadline: string;
+  sightingHeadline: string | null;
   factors: SightingFactor[];
   // optimal-time screen
-  bestWindow: string;
-  bestWindowWhy: string;
+  bestWindow: string | null;
+  bestWindowWhy: string | null;
+}
+
+/** Map the catalog's free-text difficulty onto the design's three buckets (null if unrated). */
+export function normalizeDifficulty(d: string | null): Difficulty | null {
+  switch ((d ?? "").toLowerCase()) {
+    case "easiest":
+    case "beginner":
+    case "easy":
+      return "Easy";
+    case "intermediate":
+      return "Intermediate";
+    case "advanced":
+    case "expert":
+      return "Advanced";
+    default:
+      return null;
+  }
 }
 
 export interface Trip {
@@ -168,8 +194,8 @@ export function likelihoodColor(like: Likelihood): string {
       : "var(--rare)";
 }
 
-export function diffRank(d: Difficulty): number {
-  return d === "Easy" ? 1 : d === "Intermediate" ? 2 : 3;
+export function diffRank(d: Difficulty | null): number {
+  return d === "Easy" ? 1 : d === "Intermediate" ? 2 : d === "Advanced" ? 3 : 0;
 }
 
 export function fmtTime(min: number): string {
@@ -214,9 +240,9 @@ export function compareTrails(a: Trail, b: Trail, key: TrailSortKey): number {
     case "difficulty":
       return diffRank(a.diff) - diffRank(b.diff);
     case "time":
-      return a.rideTime - b.rideTime;
+      return (a.rideTime ?? 0) - (b.rideTime ?? 0);
     case "effort":
-      return a.effort - b.effort;
+      return (a.effort ?? 0) - (b.effort ?? 0);
     case "features":
       return a.features.length - b.features.length;
     case "sighting":
