@@ -29,3 +29,16 @@ export async function apiPost<T>(path: string, body: unknown, signal?: AbortSign
   }
   return (await res.json()) as T;
 }
+
+/** POST raw binary (e.g. a WAV clip) and parse a JSON response. */
+export async function apiPostBlob<T>(path: string, blob: Blob, contentType: string): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": contentType },
+    body: blob,
+  });
+  if (!res.ok) {
+    throw new Error(`POST ${path} failed (${res.status})`);
+  }
+  return (await res.json()) as T;
+}

@@ -82,9 +82,9 @@ now runs on the **live backend**, not the design's static sample data:
   records species (checked off the trail's eBird birds or typed in) and geotagged photos
   (`exifr` reads EXIF GPS client-side; only a downscaled thumbnail + coords are kept), mapped onto
   the trail line.
-Still static/illustrative: the You tab, Optimal-time's curve (the calibrated best-time model is
-deferred), and Bird ID (BirdNET isn't wired). `src/data/trails.ts` now holds just the shared
-`Trail` type + helpers, not sample rows.
+Bird ID records a mic clip and runs it through BirdNET (`POST /birdnet/identify`). Still
+static/illustrative: the You tab and Optimal-time's curve (the calibrated best-time model is
+deferred). `src/data/trails.ts` now holds just the shared `Trail` type + helpers, not sample rows.
 
 - `src/screens/` - one component + co-located CSS Module per screen, routed in `src/App.tsx`
   (React Router). Flow screens have no bottom nav and use `BackButton`.
@@ -176,9 +176,13 @@ column will create a redundant duplicate index, not a missing one.
 
 - **eBird** (`app/integrations/ebird.py`) and **weather/NWS** (`app/integrations/weather.py`)
   are real, working clients against free public APIs.
-- **BirdNET** (`app/integrations/birdnet.py`) is an interface-only stub. There is no
-  third-party integration path into Merlin Bird ID itself (it's a closed consumer app); BirdNET
-  is Cornell's open sound-ID model and the intended substitute, but inference isn't wired up.
+- **BirdNET** (`app/integrations/birdnet.py`) runs Cornell's open sound-ID model locally via
+  `birdnetlib` (a bundled tflite model) - the substitute for the closed Merlin app, which has no
+  integration path. Inference is real (`POST /birdnet/identify`, Bird ID screen records a WAV
+  client-side and sends it). The heavy deps are an **optional `birdnet` extra** (imported lazily,
+  so the API runs without them and the endpoint returns 503); installing it pins `numpy<2` because
+  `tflite-runtime` is built against the numpy 1.x ABI. The client records 48 kHz mono WAV so the
+  server needs no ffmpeg.
 - **Trailforks**: an API request is pending (free/non-profit tier). Not yet integrated.
 - **Strava / AllTrails**: not integrated, and not just because they're unbuilt - both carry real
   ToS constraints (Strava's API agreement restricts aggregate/heatmap use of other users' data;
