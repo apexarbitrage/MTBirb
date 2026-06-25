@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://mtbirb:mtbirb@localhost:5432/mtbirb"
     ebird_api_key: str = ""
     weather_user_agent: str = "mtbirb (set WEATHER_USER_AGENT in .env)"
+    rapidapi_key: str = ""  # for TrailAPI (RapidAPI); see app/integrations/trailapi.py
 
 
 @lru_cache

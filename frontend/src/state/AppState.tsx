@@ -26,11 +26,9 @@ interface AppState {
   trailDir: Dir;
   pickTrailSort: (key: TrailSortKey) => void;
 
-  // Targeting → Trails filter
-  trailFilter: string | null;
-  setTrailFilter: (species: string | null) => void;
-  targetSpecies: string;
-  setTargetSpecies: (species: string) => void;
+  // Targeting → Trails filter: rank trails by one species' live odds (null = no filter).
+  speciesFilter: { code: string; name: string } | null;
+  setSpeciesFilter: (species: { code: string; name: string } | null) => void;
 
   // Trail Detail / Optimal time subject
   detailTrailId: string;
@@ -44,8 +42,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [discoverSort, setDiscoverSort] = useState<DiscoverSort>("wildlife");
   const [trailSort, setTrailSort] = useState<TrailSortKey>("sighting");
   const [trailDir, setTrailDir] = useState<Dir>(TRAIL_SORT_DEFAULT_DIR.sighting);
-  const [trailFilter, setTrailFilter] = useState<string | null>(null);
-  const [targetSpecies, setTargetSpecies] = useState("Barred Owl");
+  const [speciesFilter, setSpeciesFilter] = useState<{ code: string; name: string } | null>(null);
   const [detailTrailId, setDetailTrailId] = useState("raptor");
 
   const value = useMemo<AppState>(
@@ -68,14 +65,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           setTrailDir(TRAIL_SORT_DEFAULT_DIR[key]);
         }
       },
-      trailFilter,
-      setTrailFilter,
-      targetSpecies,
-      setTargetSpecies,
+      speciesFilter,
+      setSpeciesFilter,
       detailTrailId,
       setDetailTrailId,
     }),
-    [discoverSelectedId, discoverSort, trailSort, trailDir, trailFilter, targetSpecies, detailTrailId],
+    [discoverSelectedId, discoverSort, trailSort, trailDir, speciesFilter, detailTrailId],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

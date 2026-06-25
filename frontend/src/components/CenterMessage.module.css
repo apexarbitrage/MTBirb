@@ -1,0 +1,36 @@
+.wrap {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 var(--screen-pad-x);
+  text-align: center;
+  background: var(--sand);
+  color: var(--ink);
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.detail {
+  font-size: 13px;
+  color: var(--text-muted);
+  max-width: 260px;
+}
+
+.retry {
+  margin-top: 6px;
+  padding: 9px 18px;
+  border-radius: var(--radius-pill);
+  background: var(--terracotta);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.retry:active {
+  opacity: 0.75;
+}

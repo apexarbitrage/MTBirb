@@ -5,13 +5,10 @@ import { DifficultyMarker } from "../components/DifficultyMarker";
 import { ScoreRing } from "../components/ScoreRing";
 import { Photo } from "../components/Photo";
 import { BirdGlyph } from "../components/icons";
-import {
-  TRAILS,
-  TRAIL_HERO_IMG,
-  scoreColor,
-  scoreChipBg,
-  trailById,
-} from "../data/trails";
+import { CenterMessage } from "../components/CenterMessage";
+import { useTrails } from "../data/TrailsProvider";
+import { useTrailWeather, shortSky } from "../data/useTrailWeather";
+import { TRAIL_HERO_IMG, scoreColor, scoreChipBg } from "../data/trails";
 import { PROFILE } from "../data/profile";
 import { buildGreeting, formatEyebrowDate } from "../data/greeting";
 import { useAppState } from "../state/AppState";
@@ -26,6 +23,7 @@ const SORT_LABELS: Record<string, string> = {
 
 export function DiscoverScreen() {
   const navigate = useNavigate();
+  const { trails, byId, loading, error, reload } = useTrails();
   const {
     discoverSelectedId,
     setDiscoverSelectedId,
@@ -34,14 +32,33 @@ export function DiscoverScreen() {
     setDetailTrailId,
   } = useAppState();
 
-  const sel = trailById(discoverSelectedId);
+  // Live forecast for the currently-selected hero trail.
+  const selSlug = byId(discoverSelectedId)?.id ?? trails[0]?.id;
+  const { current: wx } = useTrailWeather(selSlug);
   const now = new Date();
 
-  const rest = TRAILS.filter((t) => t.id !== sel.id).sort((a, b) =>
+  if (loading || error || trails.length === 0) {
+    return (
+      <div className={common.screen}>
+        {loading ? (
+          <CenterMessage title="Loading trails…" />
+        ) : error ? (
+          <CenterMessage title="Couldn't load trails" detail={error} onRetry={reload} />
+        ) : (
+          <CenterMessage title="No trails nearby yet" />
+        )}
+        <BottomNav active="discover" />
+      </div>
+    );
+  }
+
+  const sel = byId(discoverSelectedId) ?? trails[0];
+
+  const rest = trails.filter((t) => t.id !== sel.id).sort((a, b) =>
     discoverSort === "distance"
-      ? a.miles - b.miles
+      ? (a.miles ?? 0) - (b.miles ?? 0)
       : discoverSort === "effort"
-        ? a.effort - b.effort
+        ? (a.effort ?? 0) - (b.effort ?? 0)
         : b.score - a.score,
   );
 
@@ -60,10 +77,10 @@ export function DiscoverScreen() {
           {buildGreeting({
             firstName: PROFILE.firstName,
             date: now,
-            sky: sel.sky,
+            sky: wx ? shortSky(wx.shortForecast) : null,
             condition: sel.condition,
-            trailId: sel.id,
             trailName: sel.name,
+            rareSpecies: sel.notableBirds[0] ?? null,
           })}
         </div>
 
@@ -106,7 +123,7 @@ export function DiscoverScreen() {
                   navigate("/optimal-time");
                 }}
               >
-                {sel.window}
+                {sel.window ?? sel.sightingHeadline ?? "Find the best time to ride →"}
               </button>
             </div>
           </div>
@@ -115,25 +132,25 @@ export function DiscoverScreen() {
           <div className={s.weatherStrip}>
             <div className={s.weatherCell}>
               <div style={{ height: 19, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <DifficultyMarker diff={sel.diff} size={13} onDark />
+                {sel.diff && <DifficultyMarker diff={sel.diff} size={13} onDark />}
               </div>
               <div className={s.weatherLabel} style={{ marginTop: 2 }}>
-                {sel.diff.toUpperCase()}
+                {(sel.diff ?? "Unrated").toUpperCase()}
               </div>
             </div>
             <div className={s.weatherCell}>
-              <div className={s.weatherValue}>{sel.realfeel}</div>
-              <div className={s.weatherLabel}>REALFEEL</div>
+              <div className={s.weatherValue}>{wx ? `${wx.temperature}°` : sel.realfeel}</div>
+              <div className={s.weatherLabel}>{wx ? "TEMP" : "REALFEEL"}</div>
             </div>
             <div className={s.weatherCell}>
-              <div className={s.weatherValue}>{sel.sky}</div>
+              <div className={s.weatherValue}>{wx ? shortSky(wx.shortForecast) : sel.sky}</div>
               <div className={s.weatherLabel}>SKY</div>
             </div>
             <div className={s.weatherCell}>
               <div className={s.weatherValue} style={{ color: "var(--terracotta)" }}>
-                {sel.condition}
+                {sel.condition ?? (wx ? wx.windSpeed : "—")}
               </div>
-              <div className={s.weatherLabel}>CONDITION</div>
+              <div className={s.weatherLabel}>{sel.condition ? "CONDITION" : "WIND"}</div>
             </div>
           </div>
 
@@ -141,7 +158,8 @@ export function DiscoverScreen() {
           <div className={s.peakRow}>
             <BirdGlyph fill="var(--terracotta)" eyeFill="var(--forest)" size={24} />
             <div className={s.peakText}>
-              <span style={{ fontWeight: 700 }}>Peak odds:</span> {sel.peak}
+              <span style={{ fontWeight: 700 }}>Notable nearby:</span>{" "}
+              {sel.peak ?? "No notable reports recently"}
             </div>
           </div>
 
@@ -172,11 +190,13 @@ export function DiscoverScreen() {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                  <DifficultyMarker diff={t.diff} size={10} />
+                  {t.diff && <DifficultyMarker diff={t.diff} size={10} />}
                   <div className={s.rowName}>{t.name}</div>
                 </div>
                 <div className={common.monoMeta}>
-                  {t.miles} mi · {t.metaTime} · {t.metaBird}
+                  {[t.miles != null ? `${t.miles} mi` : null, t.metaBird]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </div>
               </div>
               <div

@@ -20,6 +20,17 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.6",
 ]
+# Local BirdNET sound-ID inference (see app/integrations/birdnet.py). Heavy + optional; the API
+# runs without it (the /birdnet endpoint returns 503). numpy<2 because tflite-runtime is built
+# against the numpy 1.x ABI. tflite-runtime has Linux wheels only, so on Windows/macOS we use
+# tensorflow-cpu instead (birdnetlib auto-detects whichever is installed).
+birdnet = [
+    "birdnetlib>=0.18",
+    "librosa>=0.10",
+    "numpy<2",
+    "tflite-runtime>=2.14; platform_system == 'Linux'",
+    "tensorflow-cpu>=2.15; platform_system != 'Linux'",
+]
 
 [build-system]
 requires = ["hatchling"]

@@ -1,10 +1,9 @@
 /*
- * Builds the Discover screen's header copy (date eyebrow + headline) from
- * the real clock plus the selected trail's existing conditions/species data,
- * instead of the two lines that used to be hardcoded.
+ * Builds the Discover screen's header copy (date eyebrow + headline) from the real clock plus the
+ * selected trail's live data, instead of the two lines that used to be hardcoded. Sky comes from
+ * the live forecast when it's loaded (may be absent); the "rare species" hook uses the trail's
+ * notable eBird birds.
  */
-
-import { SPECIES } from "./trails";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = [
@@ -55,16 +54,14 @@ export function seasonOf(date: Date): Season {
 
 const KNOWN_SKY_ADJ: Record<string, string> = {
   Clear: "clear",
+  Sunny: "sunny",
   "Part cloud": "partly cloudy",
 };
 
-export function conditionAdj(sky: string): string {
+/** A short adjective for the live forecast's sky label, or null when there's no forecast yet. */
+export function conditionAdj(sky: string | null | undefined): string | null {
+  if (!sky) return null;
   return KNOWN_SKY_ADJ[sky] ?? sky.toLowerCase();
-}
-
-export function rareSpeciesFor(trailId: string): string | null {
-  const match = SPECIES.find((sp) => sp.like === "Rare" && sp.trails.includes(trailId));
-  return match?.name ?? null;
 }
 
 export function article(word: string): string {
@@ -74,20 +71,27 @@ export function article(word: string): string {
 interface BuildGreetingInput {
   firstName: string;
   date: Date;
-  sky: string;
-  condition: string;
-  trailId: string;
+  sky?: string | null;
+  condition?: string | null;
   trailName: string;
+  rareSpecies?: string | null;
 }
 
-export function buildGreeting({ firstName, date, sky, condition, trailId, trailName }: BuildGreetingInput): string {
+export function buildGreeting({
+  firstName,
+  date,
+  sky,
+  condition,
+  trailName,
+  rareSpecies,
+}: BuildGreetingInput): string {
   const bucket = timeOfDayBucket(date);
   const seasonAdj = seasonOf(date);
   const skyAdj = conditionAdj(sky);
-  const species = rareSpeciesFor(trailId);
+  const skyPrefix = skyAdj ? `${skyAdj} ` : "";
 
-  if (species) {
-    return `This ${skyAdj} ${seasonAdj} ${bucket.phrase} is the perfect time to find ${article(species)} ${species} at ${trailName}!`;
+  if (rareSpecies) {
+    return `This ${skyPrefix}${seasonAdj} ${bucket.phrase} is the perfect time to find ${article(rareSpecies)} ${rareSpecies} at ${trailName}!`;
   }
 
   const conditionTail = condition ? ` with ${condition.toLowerCase()} dirt` : "";
@@ -95,13 +99,13 @@ export function buildGreeting({ firstName, date, sky, condition, trailId, trailN
     case "goldenHour":
       return `${firstName}, what a ${seasonAdj} golden hour on ${trailName}!`;
     case "dawn":
-      return `${firstName}, ${bucket.light} ${seasonAdj} dawn on ${trailName} — ${skyAdj} skies${conditionTail}.`;
+      return `${firstName}, ${bucket.light} ${seasonAdj} dawn on ${trailName}${skyAdj ? ` — ${skyAdj} skies` : ""}${conditionTail}.`;
     case "morning":
-      return `${firstName}, ${skyAdj} ${seasonAdj} morning on ${trailName}${conditionTail}.`;
+      return `${firstName}, ${skyPrefix}${seasonAdj} morning on ${trailName}${conditionTail}.`;
     case "midday":
       return `${firstName}, ${bucket.light} skies over ${trailName} this ${seasonAdj} midday.`;
     case "afternoon":
-      return `${firstName}, a ${skyAdj} ${seasonAdj} afternoon on ${trailName}${conditionTail}.`;
+      return `${firstName}, a ${skyPrefix}${seasonAdj} afternoon on ${trailName}${conditionTail}.`;
     case "dusk":
       return `${firstName}, ${bucket.light} ${seasonAdj} dusk settling over ${trailName}.`;
     case "night":

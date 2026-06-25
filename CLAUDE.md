@@ -61,18 +61,30 @@ backend over HTTP, proxied under `/api` in dev (see `frontend/vite.config.ts`).
   metadata) and `WildlifeSighting` (a cached species observation, currently eBird-sourced, with
   Point geometry).
 - `app/integrations/` - one client per third-party data source (`ebird.py`, `weather.py`,
-  `birdnet.py`). Each wraps a single external API; this is where new data sources get added.
-- `app/services/` - cross-cutting logic that doesn't belong to one model or one integration.
-  Currently just `wildlife_likelihood.py`.
+  `birdnet.py`, `osm.py`, `trailapi.py`, `elevation.py`). Each wraps a single external API; this
+  is where new data sources get added. `elevation.py` holds two interchangeable DEM clients
+  (`OpenMeteoElevation`, `UsgsElevation`) behind a common `lookup(points)`.
+- `app/services/` - cross-cutting logic that doesn't belong to one model or one integration
+  (`wildlife_likelihood.py`, `catalog_geometry.py`, `trail_metrics.py`, ...).
 - `app/routers/` - FastAPI route modules, included in `app/main.py`.
 
 ### Frontend structure
 
 The PWA implements the hi-fi design (9 screens: 5 core tabs - Discover, Birbs/Targeting, Trails,
-Trips, You - plus 4 flow screens - Trail detail, Optimal time, Fun-drive nav, Bird ID). It runs
-on **static sample data**, not the backend yet (see `src/data/trails.ts` - the same 4 trails / 4
-species / 4 trips as the design prototype). Wiring screens to the FastAPI API is a deliberate next
-step, not an oversight.
+Trips, You - plus 4 flow screens - Trail detail, Optimal time, Fun-drive nav, Bird ID). Most of it
+now runs on the **live backend**, not the design's static sample data:
+- Discover / Trails / Trail detail read the real catalog near the user's location (`TrailsProvider`
+  + `useGeolocation` → `GET /catalog/trails`), with the recency/season/notable wildlife score,
+  OSM-derived elevation, eBird species, and NWS weather.
+- Targeting (Birbs) ranks trails by a chosen species' live odds (`GET /catalog/species`,
+  `?species=` on the trail list); its filter lives in `AppState.speciesFilter`.
+- Trips is a real logged-ride store (`GET`/`POST /trips`): the log-ride sheet on the trail detail
+  records species (checked off the trail's eBird birds or typed in) and geotagged photos
+  (`exifr` reads EXIF GPS client-side; only a downscaled thumbnail + coords are kept), mapped onto
+  the trail line.
+Bird ID records a mic clip and runs it through BirdNET (`POST /birdnet/identify`). Still
+static/illustrative: the You tab and Optimal-time's curve (the calibrated best-time model is
+deferred). `src/data/trails.ts` now holds just the shared `Trail` type + helpers, not sample rows.
 
 - `src/screens/` - one component + co-located CSS Module per screen, routed in `src/App.tsx`
   (React Router). Flow screens have no bottom nav and use `BackButton`.
@@ -82,7 +94,9 @@ step, not an oversight.
 - `src/state/AppState.tsx` - React Context holding cross-screen state (Discover hero/sort, Trails
   sort/dir, the Targeting→Trails species filter, the Trail-detail subject). Screen-local UI state
   stays in the screens.
-- `src/data/trails.ts` - sample data + the ported sort/format/score helpers.
+- `src/data/trails.ts` - the shared `Trail` type, the catalog→Trail adapter, and the ported
+  sort/format/score helpers (the static sample rows are gone). `src/data/use*.ts` are the backend
+  hooks (trails, catalog detail, nearby species, species-ranked trails, trips, geolocation).
 - `src/styles/tokens.css` - all design tokens as CSS custom properties; use these, don't hard-code
   hex. `common.module.css` holds shared visual atoms (eyebrow, title, card, score chips).
 - Photos go in `public/assets/` (see its README for the exact filenames); slots show a tasteful
@@ -91,13 +105,55 @@ step, not an oversight.
   floating button (`BirdIdFab`, on Discover + Trail detail) and Optimal time (tap the Discover hero
   window, or a Trail-detail stat tile).
 
-### The wildlife-likelihood model is the product's core differentiator, and is intentionally unfinished
+### The wildlife-likelihood model is the product's core differentiator, and is still maturing
 
-`app/services/wildlife_likelihood.py` buffers a trail's geometry and counts nearby cached
-`WildlifeSighting` rows within a lookback window. That's a raw-count proxy, not a calibrated
-"highest chance of seeing an owl" probability - it doesn't yet account for eBird search effort
-(checklists per area), seasonality, or time of day. Treat this as the area needing the most
-design work, not as a finished feature to extend incrementally.
+`app/services/wildlife_likelihood.py` scores a trail from cached `WildlifeSighting` rows within
+a buffer of its geometry. `score_catalog_trails` is the batched scorer the catalog uses: each
+species is weighted by how recently it was last seen (`exp(-days/tau)`, so stale reports fade),
+and the weights saturate into two 0..98 axes - an overall activity `score` (all species) and a
+`notable_score` (only species from eBird's *notable* feed, flagged via `WildlifeSighting.is_notable`
+and synced by `sync_notable_observations`). So "likely birds" are the common recent species and
+"notable"/`peak` are the rare ones - the product's real hook. Each species' weight is also scaled
+by **seasonality** (`species_seasonality`): the set of months it's historically present (learned
+from records older than ~35 days so the dense current feed doesn't flatten it), so an out-of-season
+vagrant is damped and an in-season specialist lifted. Because the recent/notable feeds cap at
+`back=30` days, that cross-season history comes from sampling eBird's per-region `historic` endpoint
+- `backfill_region_history` (one day/month) behind `POST /catalog/backfill-history`, which must be
+run per region (like the catalog seed) for seasonality to have signal. Still an area-level proxy,
+not a calibrated probability: it does not yet weight by eBird search effort (checklists per area) or
+time of day, and the historic sampling is coarse (one day/month under-detects month presence).
+Treat this model as the area still maturing - the highest-value place to keep deepening.
+
+### Trail terrain metrics are two-tier (Open-Meteo, then USGS)
+
+`app/services/trail_metrics.py` derives the design's elevation stats (total climb/descent,
+avg up/down grade, normalized profile, plus heuristic ride-time/effort) for a catalog trail by
+resampling its OSM line to a fixed number of points and looking up each point's DEM elevation.
+Two tiers fill the same columns: a fast batched **Open-Meteo** pass over many trails
+(`POST /catalog/compute-metrics`, ~90m DEM), then a higher-resolution **USGS 3DEP** refinement
+(~1m) computed per-trail when its detail is opened. `CatalogTrail.elev_source` records which tier
+produced the current values; the USGS pass is a no-op once a trail is already `usgs`. The coarse
+tier visibly over-reads climb on flat trails (Open-Meteo said Sawyer Camp gains 646 ft; USGS, 301)
+- that gap is the reason for the refinement.
+
+Metrics are only meaningful over a line that actually represents the trail, so two guards apply:
+a sub-metre **noise floor** when summing climb (DEM jitter otherwise inflates it), and a minimum
+**mapped length** (`_MIN_METRIC_LENGTH_M`) below which the line is treated as a fragment and
+metrics are skipped (`elev_source="too-short"`, columns nulled) rather than fabricated. The
+displayed length is `metric_length_mi` (the mapped extent), which can be shorter than TrailAPI's
+nominal `length_mi` - the UI labels the elevation card "N mi mapped" to be honest about this.
+
+### Reassembling full trails from OSM (catalog_geometry.py)
+
+OSM splits a trail into many same-named ways. `assemble_line` pulls every way matching the trail's
+name (a loose `_name_core` regex) across a length-sized bbox via `OverpassClient.fetch_named_ways`,
+then `stitch_ways` chains them from the trailhead into one ordered line - turning what used to be a
+single nearest-way fragment (e.g. 54 m of Sawyer Camp) into the real ~6 mi trail. It falls back to
+the old nearest-way match in a small radius when the named assembly comes up short. `ensure_line`
+/ `enrich_region` take `force=True` to re-assemble trails that already have an (older fragment)
+line; that clears `elev_source` so metrics recompute. Name mismatches (TrailAPI typos like
+"Purisma" vs OSM "Purisima") defeat the name filter and fall back to a fragment - those get caught
+by the mapped-length guard above, not silently shown.
 
 ### Geospatial query gotcha
 
@@ -120,9 +176,13 @@ column will create a redundant duplicate index, not a missing one.
 
 - **eBird** (`app/integrations/ebird.py`) and **weather/NWS** (`app/integrations/weather.py`)
   are real, working clients against free public APIs.
-- **BirdNET** (`app/integrations/birdnet.py`) is an interface-only stub. There is no
-  third-party integration path into Merlin Bird ID itself (it's a closed consumer app); BirdNET
-  is Cornell's open sound-ID model and the intended substitute, but inference isn't wired up.
+- **BirdNET** (`app/integrations/birdnet.py`) runs Cornell's open sound-ID model locally via
+  `birdnetlib` (a bundled tflite model) - the substitute for the closed Merlin app, which has no
+  integration path. Inference is real (`POST /birdnet/identify`, Bird ID screen records a WAV
+  client-side and sends it). The heavy deps are an **optional `birdnet` extra** (imported lazily,
+  so the API runs without them and the endpoint returns 503); installing it pins `numpy<2` because
+  `tflite-runtime` is built against the numpy 1.x ABI. The client records 48 kHz mono WAV so the
+  server needs no ffmpeg.
 - **Trailforks**: an API request is pending (free/non-profit tier). Not yet integrated.
 - **Strava / AllTrails**: not integrated, and not just because they're unbuilt - both carry real
   ToS constraints (Strava's API agreement restricts aggregate/heatmap use of other users' data;

@@ -3,6 +3,23 @@
   padding: var(--screen-pad-top) var(--screen-pad-x) 10px;
 }
 
+.titleRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.browseLink {
+  flex: none;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--terracotta);
+}
+.browseLink:active {
+  opacity: 0.6;
+}
+
 .filterBanner {
   display: flex;
   align-items: center;
