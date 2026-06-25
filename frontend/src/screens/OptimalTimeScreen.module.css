@@ -1,0 +1,175 @@
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--screen-pad-top) var(--screen-pad-x) 30px;
+}
+
+.backRow {
+  margin-bottom: 14px;
+}
+
+.recCard {
+  margin-top: 16px;
+  background: var(--forest);
+  border-radius: 18px;
+  padding: 18px;
+  color: var(--sand);
+}
+
+.recLabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--terracotta);
+}
+
+.recWindow {
+  font-size: 30px;
+  font-weight: 800;
+  margin-top: 4px;
+  letter-spacing: -0.5px;
+}
+
+.recWhy {
+  font-size: 13px;
+  color: var(--sage-on-dark);
+  margin-top: 4px;
+}
+
+.curveCard {
+  margin-top: 16px;
+  background: var(--white);
+  border-radius: var(--radius-card);
+  padding: 16px 14px 12px;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legendSwatch {
+  width: 14px;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.legendText {
+  font-size: 11px;
+  color: var(--text-muted-2);
+  font-weight: 600;
+}
+
+.chart {
+  position: relative;
+  height: 120px;
+}
+
+.bestBand {
+  position: absolute;
+  left: 8.3%;
+  width: 25%;
+  top: 0;
+  bottom: 18px;
+  background: rgba(194, 112, 61, 0.1);
+  border-left: 1.5px dashed var(--terracotta);
+  border-right: 1.5px dashed var(--terracotta);
+  border-radius: 4px;
+}
+
+.bestLabel {
+  position: absolute;
+  left: 8.3%;
+  top: -2px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--terracotta);
+  font-family: var(--font-mono);
+}
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  height: 100%;
+  padding-bottom: 18px;
+}
+
+.barGroup {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  height: 100%;
+}
+
+.bar {
+  width: 5px;
+  border-radius: 3px;
+}
+
+.hourLabels {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--text-placeholder);
+  font-family: var(--font-mono);
+}
+
+.hourStrip {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.hourTile {
+  flex: none;
+  width: 62px;
+  border-radius: var(--radius-tile);
+  padding: 12px 6px;
+  text-align: center;
+}
+
+.hourTileIdle {
+  background: var(--white);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.hourTileActive {
+  background: var(--forest);
+  color: var(--sand);
+}
+
+.hourTime {
+  font-size: 11px;
+  font-family: var(--font-mono);
+}
+
+.hourDot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  margin: 8px auto;
+}
+
+.hourTemp {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.hourWind {
+  font-size: 10px;
+}

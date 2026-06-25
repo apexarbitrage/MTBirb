@@ -1,0 +1,92 @@
+/*
+ * MTBirb design tokens.
+ * Mirrors the hi-fi handoff spec (colors, type, spacing, radius, shadow).
+ * Use these variables instead of hard-coding hex values in component CSS.
+ */
+:root {
+  /* --- Color: forest (ink / dark surfaces) --- */
+  --forest: #2d3b2d;
+  --forest-deep: #21302a;
+  --forest-near-black: #11160f;
+  --forest-1a: #1a1a1a;
+  --forest-button: #34442f;
+  --forest-button-active: #2a3726;
+
+  /* --- Color: terracotta (primary / wildlife) --- */
+  --terracotta: #c2703d;
+  --terracotta-pressed: #a85f30;
+  --terracotta-tint: rgba(194, 112, 61, 0.14);
+  --terracotta-tint-strong: rgba(194, 112, 61, 0.18);
+  --terracotta-light: #e8a978; /* eyebrow on dark */
+  --terracotta-pale: #e3b48f; /* muted bars */
+
+  /* --- Color: sage (secondary / nature) --- */
+  --sage: #8a9a5b;
+  --sage-text: #7d8a4f;
+  --sage-text-deep: #5f6b3f;
+  --sage-on-dark: #9bb08f;
+  --sage-on-dark-soft: #7e9374;
+  --sage-tint: rgba(138, 154, 91, 0.16);
+  --sage-tint-strong: rgba(138, 154, 91, 0.18);
+  --sage-pale: #cdd9bc;
+  --sage-paler: #b6c79c;
+
+  /* --- Color: neutrals / surfaces --- */
+  --sand: #f4f1ea; /* app background */
+  --sand-warm: #faf7f0; /* row active */
+  --sand-bird-chip: #faf5ec; /* tan bird chip bg */
+  --sand-stat: #fbfaf5; /* stat tile bg */
+  --page-bg: #e3e0d6; /* behind phone frame (desktop) */
+  --white: #fff;
+  --card-tile-divider: rgba(33, 48, 42, 0.08);
+  --hairline: rgba(33, 48, 42, 0.07);
+
+  /* --- Color: text --- */
+  --ink: #21302a;
+  --text-muted: #7a7d70;
+  --text-muted-2: #6f7468;
+  --text-placeholder: #9a9c90;
+  --text-on-forest-soft: #cdd6c5;
+  --text-on-forest-body: #f0e8da;
+  --tan-accent: #8a6d4f;
+  --eyebrow-mono: #6b6357;
+
+  /* --- Color: nav --- */
+  --nav-active: #c2703d;
+  --nav-inactive-icon: #aeb2a4;
+  --nav-inactive-label: #9a9c90;
+
+  /* --- Color: difficulty --- */
+  --diff-easy: #3f8a4d;
+  --diff-intermediate: #2f6cc4;
+  --diff-advanced: #11160f;
+
+  /* --- Color: status / brand --- */
+  --success: #5a8a4a;
+  --garmin: #007cc3;
+  --rare: #b6915a;
+
+  /* --- Card shadows --- */
+  --shadow-card: 0 2px 8px rgba(33, 48, 42, 0.06);
+  --shadow-card-sm: 0 1px 3px rgba(33, 48, 42, 0.06);
+  --shadow-hero: 0 8px 24px rgba(33, 48, 42, 0.18);
+  --shadow-button: 0 6px 16px rgba(194, 112, 61, 0.35);
+  --shadow-button-soft: 0 6px 16px rgba(194, 112, 61, 0.32);
+  --shadow-actionbar: 0 -4px 20px rgba(33, 48, 42, 0.08);
+
+  /* --- Type --- */
+  --font-sans: "Hanken Grotesk", system-ui, -apple-system, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, monospace;
+
+  /* --- Layout --- */
+  --screen-pad-x: 20px;
+  --screen-pad-top: 54px;
+  --nav-height: 84px;
+  --content-pad-bottom: 90px;
+  --radius-card: 16px;
+  --radius-card-lg: 22px;
+  --radius-pill: 999px;
+  --radius-tag: 8px;
+  --radius-tile: 14px;
+  --app-max-width: 430px;
+}
