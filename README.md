@@ -45,10 +45,17 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 cp .env.example .env   # fill in EBIRD_API_KEY, etc.
 alembic upgrade head
+python -m app.seed_sample   # load a Bay Area trail sample (no TrailAPI key needed)
 uvicorn app.main:app --reload
 ```
 
 API runs on `http://localhost:8000`. Run tests with `pytest`, lint with `ruff check .`.
+
+`python -m app.seed_sample` populates ~68 real Bay Area trails from a committed fixture so the app
+works immediately with only the free data sources (eBird for wildlife - set `EBIRD_API_KEY`; NWS
+weather and Open-Meteo/USGS elevation need no key). A `RAPIDAPI_KEY` (TrailAPI) is only needed to
+discover trails in *other* regions on demand, and its free tier is heavily rate-limited - the
+sample seed avoids it entirely. `python -m app.seed_catalog` does the full TrailAPI grid sweep.
 
 ### Frontend
 
