@@ -12,6 +12,8 @@ import {
   scoreChipBg,
   trailById,
 } from "../data/trails";
+import { PROFILE } from "../data/profile";
+import { buildGreeting, formatEyebrowDate } from "../data/greeting";
 import { useAppState } from "../state/AppState";
 import common from "../styles/common.module.css";
 import s from "./DiscoverScreen.module.css";
@@ -33,6 +35,7 @@ export function DiscoverScreen() {
   } = useAppState();
 
   const sel = trailById(discoverSelectedId);
+  const now = new Date();
 
   const rest = TRAILS.filter((t) => t.id !== sel.id).sort((a, b) =>
     discoverSort === "distance"
@@ -51,9 +54,18 @@ export function DiscoverScreen() {
     <div className={common.screen}>
       <div className={common.scrollArea}>
         <div className={common.eyebrow} style={{ letterSpacing: 1.5 }}>
-          Sat · Jun 20 · 5:42 AM
+          {formatEyebrowDate(now)}
         </div>
-        <div className={common.title}>Good morning, Max</div>
+        <div className={common.title}>
+          {buildGreeting({
+            firstName: PROFILE.firstName,
+            date: now,
+            sky: sel.sky,
+            condition: sel.condition,
+            trailId: sel.id,
+            trailName: sel.name,
+          })}
+        </div>
 
         {/* Hero optimal card */}
         <div className={s.heroCard}>
