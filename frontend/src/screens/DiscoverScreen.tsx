@@ -9,6 +9,8 @@ import { CenterMessage } from "../components/CenterMessage";
 import { useTrails } from "../data/TrailsProvider";
 import { useTrailWeather, shortSky } from "../data/useTrailWeather";
 import { TRAIL_HERO_IMG, scoreColor, scoreChipBg } from "../data/trails";
+import { PROFILE } from "../data/profile";
+import { buildGreeting, formatEyebrowDate } from "../data/greeting";
 import { useAppState } from "../state/AppState";
 import common from "../styles/common.module.css";
 import s from "./DiscoverScreen.module.css";
@@ -30,9 +32,10 @@ export function DiscoverScreen() {
     setDetailTrailId,
   } = useAppState();
 
-  // Live forecast for the currently-selected hero trail (falls back to seeded values).
+  // Live forecast for the currently-selected hero trail.
   const selSlug = byId(discoverSelectedId)?.id ?? trails[0]?.id;
   const { current: wx } = useTrailWeather(selSlug);
+  const now = new Date();
 
   if (loading || error || trails.length === 0) {
     return (
@@ -68,9 +71,18 @@ export function DiscoverScreen() {
     <div className={common.screen}>
       <div className={common.scrollArea}>
         <div className={common.eyebrow} style={{ letterSpacing: 1.5 }}>
-          Sat · Jun 20 · 5:42 AM
+          {formatEyebrowDate(now)}
         </div>
-        <div className={common.title}>Good morning, Max</div>
+        <div className={common.title}>
+          {buildGreeting({
+            firstName: PROFILE.firstName,
+            date: now,
+            sky: wx ? shortSky(wx.shortForecast) : null,
+            condition: sel.condition,
+            trailName: sel.name,
+            rareSpecies: sel.notableBirds[0] ?? null,
+          })}
+        </div>
 
         {/* Hero optimal card */}
         <div className={s.heroCard}>

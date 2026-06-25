@@ -3,6 +3,7 @@ import { DifficultyMarker } from "../components/DifficultyMarker";
 import { Photo } from "../components/Photo";
 import { CheckBadge } from "../components/icons";
 import { AVATAR_IMG } from "../data/trails";
+import { PROFILE } from "../data/profile";
 import common from "../styles/common.module.css";
 import s from "./YouScreen.module.css";
 
@@ -27,14 +28,16 @@ export function YouScreen() {
         <div className={s.profileRow}>
           <Photo
             src={AVATAR_IMG}
-            alt="Max Gokhman"
+            alt={PROFILE.name}
             shape="circle"
             style={{ width: 64, height: 64, flex: "none" }}
             label="Photo"
           />
           <div>
-            <div className={s.name}>Max Gokhman</div>
-            <div className={s.sub}>Redwood City, CA · since 2024</div>
+            <div className={s.name}>{PROFILE.name}</div>
+            <div className={s.sub}>
+              {PROFILE.homeLocation} · since {PROFILE.memberSince}
+            </div>
           </div>
         </div>
 
