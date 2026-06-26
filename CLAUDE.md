@@ -244,8 +244,10 @@ column will create a redundant duplicate index, not a missing one.
   twistiness read is derived from the route geometry (`services/drive_route.curviness`, density-
   invariant total-turning-per-km) and `sample_waypoints` thins the route for the **maps-app handoff**:
   the `FunDriveNavScreen` "Start drive" opens Google Maps with those waypoints so the actual drive
-  follows the scenic route shown in-app. The screen renders an SVG route preview (no map tiles) +
-  the Fun-drive/Fastest toggle; real turn-by-turn is delegated to the maps app.
+  follows the scenic route shown in-app. The screen renders the route as a **Leaflet** layer over
+  real **TomTom map tiles**, proxied through the backend (`routers/map.py` → `TomTomClient.fetch_tile`,
+  Leaflet's tile layer hits `/api/map/tile/{z}/{x}/{y}`) so the key never reaches the browser; the
+  Fun-drive/Fastest toggle swaps the drawn route, and real turn-by-turn is delegated to the maps app.
 
 ### Sensitive-species handling
 

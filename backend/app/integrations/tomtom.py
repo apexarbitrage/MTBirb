@@ -14,6 +14,7 @@ import httpx
 from app.config import get_settings
 
 TOMTOM_ROUTING_URL = "https://api.tomtom.com/routing/1/calculateRoute"
+TOMTOM_TILE_URL = "https://api.tomtom.com/map/1/tile/basic/main"
 
 
 class TomTomNotConfigured(RuntimeError):
@@ -65,3 +66,13 @@ class TomTomClient:
             "travel_time_s": summary["travelTimeInSeconds"],
             "points": points,
         }
+
+    async def fetch_tile(self, z: int, x: int, y: int) -> bytes:
+        """A single raster map tile (PNG) from TomTom, fetched server-side so the key stays in
+        `.env` and never reaches the browser (the frontend's Leaflet layer hits our proxy)."""
+        if not self._key:
+            raise TomTomNotConfigured("TOMTOM_API_KEY not set")
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(f"{TOMTOM_TILE_URL}/{z}/{x}/{y}.png", params={"key": self._key})
+            resp.raise_for_status()
+            return resp.content
