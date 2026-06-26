@@ -49,4 +49,15 @@ class CatalogTrail(Base):
     ride_time_min: Mapped[int | None] = mapped_column(Integer, nullable=True)
     effort: Mapped[float | None] = mapped_column(Float, nullable=True)
     elev_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # Expanded per-trail terrain/surface stats. DEM-derived (set with the elevation metrics):
+    max_grade: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    high_point_ft: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    low_point_ft: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    longest_climb_mi: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Slope aspect (compass) + sun exposure (0..1), from DEM 2D sampling (services/trail_surface.py):
+    aspect: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    sun_exposure: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # OSM way tags, aggregated when the line is matched (services/catalog_geometry.py):
+    surface: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    mtb_scale: Mapped[str | None] = mapped_column(String(8), nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

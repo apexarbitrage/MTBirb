@@ -5,6 +5,9 @@ AllTrails - see CLAUDE.md). This fetches ridable ways (paths/tracks/cycleways) w
 full line geometry so trails get real coordinates instead of placeholders.
 """
 
+import re
+from collections import Counter
+
 import httpx
 
 from app.config import get_settings
@@ -67,6 +70,31 @@ class OverpassClient:
             response = await client.post(self._url, data={"data": query})
             response.raise_for_status()
             return parse_ways(response.json().get("elements", []))
+
+
+def _scale_rank(scale: str) -> int:
+    """Order `mtb:scale` values (0..6, sometimes "1+") by their leading digit."""
+    match = re.match(r"(\d)", scale)
+    return int(match.group(1)) if match else -1
+
+
+def summarize_surface(ways: list[dict]) -> dict:
+    """Aggregate a trail's OSM ways into a surface descriptor.
+
+    Returns the most-common `surface` tag (title-cased, e.g. "Fine Gravel") and the hardest
+    `mtb:scale` (technical difficulty 0..6) across the ways - both None when untagged.
+    """
+    surfaces: Counter[str] = Counter()
+    scales: list[str] = []
+    for way in ways:
+        tags = way.get("tags", {})
+        if tags.get("surface"):
+            surfaces[tags["surface"]] += 1
+        if tags.get("mtb:scale") is not None:
+            scales.append(str(tags["mtb:scale"]))
+    surface = surfaces.most_common(1)[0][0].replace("_", " ").title() if surfaces else None
+    mtb_scale = max(scales, key=_scale_rank) if scales else None
+    return {"surface": surface, "mtb_scale": mtb_scale}
 
 
 def parse_ways(elements: list[dict]) -> list[dict]:

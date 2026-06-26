@@ -170,6 +170,18 @@ metrics are skipped (`elev_source="too-short"`, columns nulled) rather than fabr
 displayed length is `metric_length_mi` (the mapped extent), which can be shorter than TrailAPI's
 nominal `length_mi` - the UI labels the elevation card "N mi mapped" to be honest about this.
 
+Beyond climb/descent/grade, `compute` also yields **max grade, high/low point, and longest
+sustained climb** (pure math off the same samples), and `ensure_metrics` computes a slope
+**aspect + sun-exposure** (`services/trail_surface.py`): it samples the DEM at four neighbours
+around points on the line, reduces each to a downhill bearing, and slope-weight-averages them into
+a dominant 8-point compass aspect + a 0..1 sun-exposure (1 = fully equator-facing). Aspect is the
+per-trail differentiator the optimal-now sort will later use (north-facing trails stay
+shaded/wetter). It recomputes when `aspect` is null even on an already-`usgs` trail, so older trails
+backfill on detail open. Independently, `ensure_line` aggregates the matched OSM ways' tags
+(`osm.summarize_surface`) into a **surface** type and **mtb:scale** technical rating, backfilling
+them on detail open when null. All of these surface on the Trail-detail terrain card; the
+optimal-now sort doesn't fold aspect/surface in yet (a deliberate next step).
+
 ### Reassembling full trails from OSM (catalog_geometry.py)
 
 OSM splits a trail into many same-named ways. `assemble_line` pulls every way matching the trail's

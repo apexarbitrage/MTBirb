@@ -64,6 +64,15 @@ class CatalogTrailOut(BaseModel):
     rideTimeMin: int | None
     effort: float | None
     elevSource: str | None
+    # Expanded terrain + surface stats (null until computed/enriched).
+    maxGrade: str | None = None
+    highPointFt: int | None = None
+    lowPointFt: int | None = None
+    longestClimbMi: float | None = None
+    aspect: str | None = None
+    sunExposure: float | None = None
+    surface: str | None = None
+    mtbScale: str | None = None
     # Wildlife overlay from cached eBird (preview proxy; null/empty when not scored). `score` is
     # overall recency-weighted activity; `notableScore` is the odds of something locally unusual.
     score: int | None = None
@@ -105,6 +114,14 @@ class CatalogTrailOut(BaseModel):
             rideTimeMin=t.ride_time_min,
             effort=t.effort,
             elevSource=t.elev_source,
+            maxGrade=t.max_grade,
+            highPointFt=t.high_point_ft,
+            lowPointFt=t.low_point_ft,
+            longestClimbMi=t.longest_climb_mi,
+            aspect=t.aspect,
+            sunExposure=t.sun_exposure,
+            surface=t.surface,
+            mtbScale=t.mtb_scale,
             speciesLikelihood=species_likelihood,
             **wildlife,
         )

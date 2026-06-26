@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models import CatalogTrail
 from app.services.trail_catalog import line_points
+from app.services.trail_surface import compute_aspect
 
 _M_PER_FT = 0.3048
 _M_PER_MI = 1609.344
@@ -32,6 +33,8 @@ _TOO_SHORT = "too-short"
 _METRIC_FIELDS = (
     "metric_length_mi", "ascent_ft", "descent_ft", "avg_up_grade",
     "avg_down_grade", "elevation_profile", "ride_time_min", "effort",
+    "max_grade", "high_point_ft", "low_point_ft", "longest_climb_mi",
+    "aspect", "sun_exposure",
 )
 
 
@@ -84,16 +87,23 @@ def compute(elevations_m: list[float], total_m: float) -> dict:
 
     ascent_m = descent_m = 0.0
     up_run_m = down_run_m = 0.0
+    max_up_grade = 0.0
+    longest_climb_m = cur_climb_m = 0.0
     for i in range(1, n):
         delta = elevations_m[i] - elevations_m[i - 1]
-        if abs(delta) < _NOISE_FLOOR_M:
-            continue
-        if delta > 0:
+        if delta > _NOISE_FLOOR_M:
             ascent_m += delta
             up_run_m += seg_m
+            cur_climb_m += seg_m
+            longest_climb_m = max(longest_climb_m, cur_climb_m)
+            if seg_m:
+                max_up_grade = max(max_up_grade, delta / seg_m * 100)
         else:
-            descent_m += -delta
-            down_run_m += seg_m
+            # A descent or a near-flat bench both end the current sustained climb.
+            if delta < -_NOISE_FLOOR_M:
+                descent_m += -delta
+                down_run_m += seg_m
+            cur_climb_m = 0.0
 
     lo, hi = min(elevations_m), max(elevations_m)
     span = hi - lo or 1.0
@@ -120,6 +130,10 @@ def compute(elevations_m: list[float], total_m: float) -> dict:
         "elevation_profile": profile,
         "ride_time_min": int(ride_min),
         "effort": effort,
+        "max_grade": f"{max_up_grade:.0f}%",
+        "high_point_ft": round(hi / _M_PER_FT),
+        "low_point_ft": round(lo / _M_PER_FT),
+        "longest_climb_mi": round(longest_climb_m / _M_PER_MI, 2),
     }
 
 
@@ -131,7 +145,11 @@ async def ensure_metrics(db: Session, trail: CatalogTrail, client, *, force: boo
     """
     if trail.line_geom is None:
         return False
-    if not force and trail.elev_source in (client.source, _TOO_SHORT):
+    if not force and trail.elev_source == _TOO_SHORT:
+        return False
+    # Re-run if this tier already produced the metrics, unless a newer field (aspect) is missing -
+    # that lets trails computed before aspect existed backfill it on the next detail open.
+    if not force and trail.elev_source == client.source and trail.aspect is not None:
         return False
     points = line_points(db, trail.id)
     if not points or len(points) < 2:
@@ -156,6 +174,16 @@ async def ensure_metrics(db: Session, trail: CatalogTrail, client, *, force: boo
     trail.elevation_profile = metrics["elevation_profile"]
     trail.ride_time_min = metrics["ride_time_min"]
     trail.effort = metrics["effort"]
+    trail.max_grade = metrics["max_grade"]
+    trail.high_point_ft = metrics["high_point_ft"]
+    trail.low_point_ft = metrics["low_point_ft"]
+    trail.longest_climb_mi = metrics["longest_climb_mi"]
+    try:
+        aspect = await compute_aspect(client, samples, client.source)
+        trail.aspect = aspect["aspect"]
+        trail.sun_exposure = aspect["sun_exposure"]
+    except Exception:  # noqa: BLE001 - aspect is a bonus; keep the elevation metrics on failure
+        pass
     trail.elev_source = client.source
     db.commit()
     return True
