@@ -178,11 +178,13 @@ sustained climb** (pure math off the same samples), and `ensure_metrics` compute
 **aspect + sun-exposure** (`services/trail_surface.py`): it samples the DEM at four neighbours
 around points on the line, reduces each to a downhill bearing, and slope-weight-averages them into
 a dominant 8-point compass aspect + a 0..1 sun-exposure (1 = fully equator-facing). Aspect is the
-per-trail differentiator the optimal-now sort will later use (north-facing trails stay
-shaded/wetter). It recomputes when `aspect` is null even on an already-`usgs` trail, so older trails
-backfill on detail open. Independently, `ensure_line` aggregates the matched OSM ways' tags
-(`osm.summarize_surface`) into a **surface** type and **mtb:scale** technical rating, backfilling
-them on detail open when null. All of these surface on the Trail-detail terrain card and feed the
+per-trail differentiator the optimal-now sort uses (north-facing trails stay shaded/wetter). It's
+computed only when `aspect` is null, so the cheap (batched) Open-Meteo pass sets it once and the
+per-detail USGS refine skips those extra DEM lookups - keeping detail loads fast. Independently,
+`ensure_line` aggregates the matched OSM ways' tags (`osm.summarize_surface`) into a **surface**
+type and **mtb:scale** technical rating, but only when it actually (re)assembles geometry - never as
+a blocking Overpass call on every detail open; use `enrich-geometry?force=true` to (re)populate
+surface for already-lined trails. All of these surface on the Trail-detail terrain card and feed the
 optimal-now sort's per-trail drainage (see `per_trail_surface_factor` below).
 
 ### Reassembling full trails from OSM (catalog_geometry.py)
