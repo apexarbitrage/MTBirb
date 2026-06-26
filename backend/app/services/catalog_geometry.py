@@ -16,7 +16,7 @@ from geoalchemy2.elements import WKTElement
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.integrations.osm import OverpassClient
+from app.integrations.osm import OverpassClient, summarize_surface
 from app.models import CatalogTrail
 
 _SEARCH_RADIUS_M = 700
@@ -141,9 +141,10 @@ def stitch_ways(
 
 async def assemble_line(
     client: OverpassClient, name: str, lon: float, lat: float, length_mi: float | None
-) -> list[tuple[float, float]] | None:
+) -> tuple[list[tuple[float, float]] | None, list[dict]]:
     """Reassemble a trail's full line from OSM: pull every same-named way across a length-sized
-    bbox and stitch them, falling back to the nearest single way in a small radius."""
+    bbox and stitch them, falling back to the nearest single way in a small radius. Also returns
+    the ways that informed the chosen line (for the surface summary)."""
     tnorm = _norm(name)
     core = _name_core(name)
     if core:
@@ -151,12 +152,12 @@ async def assemble_line(
         named = [w for w in ways if w.get("name") and _name_match(tnorm, _norm(w["name"]))]
         chain = stitch_ways(named or ways, lon, lat)
         if chain and _line_length_m(chain) >= _MIN_ASSEMBLED_M:
-            return chain
+            return chain, (named or ways)
 
     ways = await client.fetch_ways(*_bbox(lat, lon, _SEARCH_RADIUS_M))
     named = [w for w in ways if w.get("name") and _name_match(tnorm, _norm(w["name"]))]
     chain = stitch_ways(named, lon, lat) if named else None
-    return chain or best_line_for(name, lon, lat, ways)
+    return chain or best_line_for(name, lon, lat, ways), (named or ways)
 
 
 async def ensure_line(
@@ -167,11 +168,22 @@ async def ensure_line(
     `force` re-assembles even when a line already exists (e.g. to replace an older fragment with
     a fuller stitched line); the trail's elevation metrics are cleared so they get recomputed.
     """
-    if trail.line_geom is not None and not force:
+    has_line = trail.line_geom is not None
+    if has_line and not force and trail.surface is not None:
         return True
     client = client or OverpassClient()
-    points = await assemble_line(client, trail.name, trail.lon, trail.lat, trail.length_mi)
+    points, ways_used = await assemble_line(client, trail.name, trail.lon, trail.lat, trail.length_mi)
+
+    surface = summarize_surface(ways_used)
+    trail.surface = surface["surface"]
+    trail.mtb_scale = surface["mtb_scale"]
+
+    if has_line and not force:
+        # Geometry is already good - this pass only backfills the surface summary.
+        db.commit()
+        return True
     if not points:
+        db.commit()  # persist any surface we did learn, even without a usable line
         return False
     coords = ", ".join(f"{lon} {lat}" for lon, lat in points)
     trail.line_geom = WKTElement(f"LINESTRING({coords})", srid=4326)

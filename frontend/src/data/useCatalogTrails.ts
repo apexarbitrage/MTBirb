@@ -29,6 +29,15 @@ export interface CatalogTrail {
   rideTimeMin: number | null;
   effort: number | null;
   elevSource: string | null;
+  // Expanded terrain + surface stats (detail screen; null until computed/enriched).
+  maxGrade: string | null;
+  highPointFt: number | null;
+  lowPointFt: number | null;
+  longestClimbMi: number | null;
+  aspect: string | null;
+  sunExposure: number | null;
+  surface: string | null;
+  mtbScale: string | null;
   // First-pass wildlife overlay (recency + seasonality + notable; see wildlife_likelihood.py).
   score: number | null;
   notableScore: number | null;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { useNavigate } from "react-router-dom";
 import { BackButton } from "../components/BackButton";
 import { BirdIdFab } from "../components/BirdIdFab";
@@ -23,6 +23,22 @@ function elevationPaths(elev: number[]) {
 }
 
 const ELEV_SOURCE_LABEL: Record<string, string> = { usgs: "USGS 3DEP", "open-meteo": "Open-Meteo" };
+
+/** A plain-language read on a trail's sun exposure (0..1, 1 = fully equator-facing). */
+function sunWord(exposure: number | null): string {
+  if (exposure == null) return "varied sun";
+  return exposure >= 0.66 ? "mostly sunny" : exposure <= 0.34 ? "mostly shaded" : "mixed sun";
+}
+
+const surfaceChip: CSSProperties = {
+  fontSize: 12,
+  fontWeight: 600,
+  color: "var(--sage-text)",
+  background: "var(--sage-tint)",
+  border: "1px solid var(--sage-pale)",
+  padding: "5px 10px",
+  borderRadius: 8,
+};
 
 export function TrailDetailScreen() {
   const navigate = useNavigate();
@@ -204,7 +220,46 @@ export function TrailDetailScreen() {
                   <div className={s.elevStatNum} style={{ color: "var(--ink)" }}>{trail.avgDownGrade ?? "–"}</div>
                   <div className={s.statLabel}>AVG DOWN GRADE</div>
                 </div>
+                {trail.maxGrade && (
+                  <div className={s.elevStatCell}>
+                    <div className={s.elevStatNum} style={{ color: "var(--ink)" }}>{trail.maxGrade}</div>
+                    <div className={s.statLabel}>MAX GRADE</div>
+                  </div>
+                )}
+                {trail.longestClimbMi != null && (
+                  <div className={s.elevStatCell}>
+                    <div className={s.elevStatNum} style={{ color: "var(--ink)" }}>{trail.longestClimbMi} mi</div>
+                    <div className={s.statLabel}>LONGEST CLIMB</div>
+                  </div>
+                )}
+                {trail.highPointFt != null && (
+                  <div className={s.elevStatCell}>
+                    <div className={s.elevStatNum} style={{ color: "var(--ink)" }}>{trail.highPointFt.toLocaleString()} ft</div>
+                    <div className={s.statLabel}>HIGH POINT</div>
+                  </div>
+                )}
+                {trail.lowPointFt != null && (
+                  <div className={s.elevStatCell}>
+                    <div className={s.elevStatNum} style={{ color: "var(--ink)" }}>{trail.lowPointFt.toLocaleString()} ft</div>
+                    <div className={s.statLabel}>LOW POINT</div>
+                  </div>
+                )}
               </div>
+
+              {/* Surface descriptor from OSM tags + computed slope aspect */}
+              {(trail.surface || trail.mtbScale || trail.aspect) && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 12 }}>
+                  {trail.surface && (
+                    <span style={surfaceChip}>{trail.surface}</span>
+                  )}
+                  {trail.mtbScale && (
+                    <span style={surfaceChip}>Tech S{trail.mtbScale}</span>
+                  )}
+                  {trail.aspect && (
+                    <span style={surfaceChip}>{trail.aspect}-facing · {sunWord(trail.sunExposure)}</span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

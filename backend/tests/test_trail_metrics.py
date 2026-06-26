@@ -44,6 +44,22 @@ def test_compute_noise_floor_ignores_jitter() -> None:
     assert m["avg_up_grade"] == "0.0%"
 
 
+def test_compute_extra_stats() -> None:
+    # Up 100m then down 100m over 2000m (5 samples, 500m segments).
+    m = compute([0.0, 50.0, 100.0, 50.0, 0.0], 2000.0)
+    assert m["max_grade"] == "10%"  # 50m over a 500m segment
+    assert m["high_point_ft"] == round(100 / 0.3048)
+    assert m["low_point_ft"] == 0
+    # The two consecutive up-segments form the longest sustained climb (1000m).
+    assert m["longest_climb_mi"] == round(1000 / 1609.344, 2)
+
+
+def test_compute_max_grade_picks_steepest() -> None:
+    # Segments rise 10m, 30m, 5m over 100m each: the 30m one is the steepest (30%).
+    m = compute([0.0, 10.0, 40.0, 45.0], 300.0)
+    assert m["max_grade"] == "30%"
+
+
 def test_compute_grade_and_profile() -> None:
     # Pure 10% climb: rises 100m over 1000m horizontal.
     elevations = [0.0, 25.0, 50.0, 75.0, 100.0]
