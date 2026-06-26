@@ -15,10 +15,12 @@ from app.config import get_settings
 from app.db import get_db
 from app.integrations.elevation import OpenMeteoElevation, UsgsElevation
 from app.integrations.precipitation import OpenMeteoPrecip
+from app.integrations.tomtom import TomTomClient, TomTomNotConfigured
 from app.integrations.weather import WeatherClient
 from app.models import CatalogTrail
 from app.schemas.catalog import CatalogTrailOut
 from app.services.catalog_geometry import ensure_line, enrich_region
+from app.services.drive_route import curviness, sample_waypoints
 from app.services.optimal_ride_time import (
     current_conditions_score,
     score_now,
@@ -269,6 +271,51 @@ async def catalog_optimal_now(
         "trails": ranked,
         "conditionsNow": weather_now,
         "trailConditions": {"score": surface["score"], "label": surface["label"]} if surface else None,
+    }
+
+
+def _drive_leg(route: dict, *, with_extras: bool) -> dict:
+    leg = {
+        "distanceMi": round(route["distance_m"] / 1609.344, 1),
+        "durationMin": round(route["travel_time_s"] / 60),
+        "points": route["points"],
+    }
+    if with_extras:
+        leg["curviness"] = curviness(route["points"])
+        leg["waypoints"] = sample_waypoints(route["points"], n=8)
+    return leg
+
+
+@router.get("/trails/{external_id}/drive")
+async def catalog_trail_drive(
+    external_id: str,
+    from_lat: float = Query(..., ge=-90, le=90),
+    from_lon: float = Query(..., ge=-180, le=180),
+    db: Session = Depends(get_db),
+) -> dict:
+    """A "fun drive" + fastest route from the user to the trailhead (TomTom). The thrilling route
+    carries a derived twistiness read and sampled waypoints for the maps-app handoff. 503 when
+    TOMTOM_API_KEY isn't set; 502 if TomTom errors."""
+    trail = _get_catalog_or_404(db, external_id)
+    origin, destination = (from_lat, from_lon), (trail.lat, trail.lon)
+    client = TomTomClient()
+    try:
+        fun = await client.calculate_route(origin, destination, route_type="thrilling")
+        fastest = await client.calculate_route(origin, destination, route_type="fastest")
+    except TomTomNotConfigured as exc:
+        raise HTTPException(status_code=503, detail="set TOMTOM_API_KEY to enable fun-drive routing") from exc
+    except Exception as exc:  # noqa: BLE001 - TomTom hiccup / no route found
+        raise HTTPException(status_code=502, detail="couldn't compute a drive to this trailhead") from exc
+
+    fun_leg = _drive_leg(fun, with_extras=True)
+    fastest_leg = _drive_leg(fastest, with_extras=False)
+    return {
+        "trail": external_id,
+        "origin": {"lat": from_lat, "lon": from_lon},
+        "destination": {"lat": trail.lat, "lon": trail.lon},
+        "fun": fun_leg,
+        "fastest": fastest_leg,
+        "extraMin": fun_leg["durationMin"] - fastest_leg["durationMin"],
     }
 
 
