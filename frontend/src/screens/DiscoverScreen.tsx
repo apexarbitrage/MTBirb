@@ -8,6 +8,7 @@ import { BirdGlyph } from "../components/icons";
 import { CenterMessage } from "../components/CenterMessage";
 import { useTrails } from "../data/TrailsProvider";
 import { useTrailWeather, shortSky } from "../data/useTrailWeather";
+import { useOptimalTime } from "../data/useOptimalTime";
 import { TRAIL_HERO_IMG, scoreColor, scoreChipBg } from "../data/trails";
 import { PROFILE } from "../data/profile";
 import { buildGreeting, formatEyebrowDate } from "../data/greeting";
@@ -35,6 +36,7 @@ export function DiscoverScreen() {
   // Live forecast for the currently-selected hero trail.
   const selSlug = byId(discoverSelectedId)?.id ?? trails[0]?.id;
   const { current: wx } = useTrailWeather(selSlug);
+  const { data: heroOptimal } = useOptimalTime(selSlug);
   const now = new Date();
 
   if (loading || error || trails.length === 0) {
@@ -123,7 +125,7 @@ export function DiscoverScreen() {
                   navigate("/optimal-time");
                 }}
               >
-                {sel.window ?? sel.sightingHeadline ?? "Find the best time to ride →"}
+                {heroOptimal?.window ?? sel.window ?? sel.sightingHeadline ?? "Find the best time to ride →"}
               </button>
             </div>
           </div>

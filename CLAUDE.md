@@ -82,9 +82,12 @@ now runs on the **live backend**, not the design's static sample data:
   records species (checked off the trail's eBird birds or typed in) and geotagged photos
   (`exifr` reads EXIF GPS client-side; only a downscaled thumbnail + coords are kept), mapped onto
   the trail line.
-Bird ID records a mic clip and runs it through BirdNET (`POST /birdnet/identify`). Still
-static/illustrative: the You tab and Optimal-time's curve (the calibrated best-time model is
-deferred). `src/data/trails.ts` now holds just the shared `Trail` type + helpers, not sample rows.
+Bird ID records a mic clip and runs it through BirdNET (`POST /birdnet/identify`). Optimal time
+is live too: its dual curve, best window, and hourly strip come from the per-hour ride-time model
+(`GET /catalog/trails/{id}/optimal-time` via `useOptimalTime`), which also feeds the Discover hero
+window and a Trail-detail card; it falls back to an illustrative sample outside the US (no NWS
+hourly forecast). Still static/illustrative: the You tab. `src/data/trails.ts` now holds just the
+shared `Trail` type + helpers, not sample rows.
 
 - `src/screens/` - one component + co-located CSS Module per screen, routed in `src/App.tsx`
   (React Router). Flow screens have no bottom nav and use `BackButton`.
@@ -123,6 +126,20 @@ run per region (like the catalog seed) for seasonality to have signal. Still an 
 not a calibrated probability: it does not yet weight by eBird search effort (checklists per area) or
 time of day, and the historic sampling is coarse (one day/month under-detects month presence).
 Treat this model as the area still maturing - the highest-value place to keep deepening.
+
+### The optimal-ride-time model blends live weather with a wildlife-activity prior
+
+`app/services/optimal_ride_time.py` scores the best time-of-day to ride a trail. For each upcoming
+daylight hour it computes two 0..98 axes - **riding conditions** (comfort temperature, wind, precip
+chance, and daylight, from the NWS *hourly* forecast `forecast_hourly`) and **wildlife activity** (a
+crepuscular dawn/dusk prior from `services/solar.py` sun times, scaled by the trail's overall eBird
+`score` so a birdier trail's curve sits higher) - then a conditions-weighted `combined` score. The
+best window is the highest-summed run of hours near the day's peak. `GET
+/catalog/trails/{id}/optimal-time` serves the curve + window; it's the only place that fetches the
+hourly forecast (the list/detail stay fast). The model is pure/dependency-free and unit-tested
+(`test_optimal_ride_time.py`, `test_solar.py`); it's a first pass, not calibrated - no past-rain mud,
+no trail aspect/exposure, no time-stamped eBird effort yet. NWS is US-only, so the endpoint fails
+soft (`available:false`) and the screen shows an illustrative fallback outside the US.
 
 ### Trail terrain metrics are two-tier (Open-Meteo, then USGS)
 
