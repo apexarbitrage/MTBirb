@@ -9,6 +9,7 @@ import { CenterMessage } from "../components/CenterMessage";
 import { useTrails } from "../data/TrailsProvider";
 import { useTrailWeather, shortSky } from "../data/useTrailWeather";
 import { useOptimalTime } from "../data/useOptimalTime";
+import { useOptimalNow } from "../data/useOptimalNow";
 import { TRAIL_HERO_IMG, scoreColor, scoreChipBg } from "../data/trails";
 import { PROFILE } from "../data/profile";
 import { buildGreeting, formatEyebrowDate } from "../data/greeting";
@@ -20,11 +21,12 @@ const SORT_LABELS: Record<string, string> = {
   wildlife: "WILDLIFE",
   distance: "DISTANCE",
   effort: "EFFORT",
+  optimal: "OPTIMAL NOW",
 };
 
 export function DiscoverScreen() {
   const navigate = useNavigate();
-  const { trails, byId, loading, error, reload } = useTrails();
+  const { trails, byId, location, loading, error, reload } = useTrails();
   const {
     discoverSelectedId,
     setDiscoverSelectedId,
@@ -37,6 +39,12 @@ export function DiscoverScreen() {
   const selSlug = byId(discoverSelectedId)?.id ?? trails[0]?.id;
   const { current: wx } = useTrailWeather(selSlug);
   const { data: heroOptimal } = useOptimalTime(selSlug);
+  // Optimal-now ranking (only fetched while that sort is active).
+  const { scores: optimalNow } = useOptimalNow(
+    location.lat,
+    location.lon,
+    discoverSort === "optimal",
+  );
   const now = new Date();
 
   if (loading || error || trails.length === 0) {
@@ -61,7 +69,9 @@ export function DiscoverScreen() {
       ? (a.miles ?? 0) - (b.miles ?? 0)
       : discoverSort === "effort"
         ? (a.effort ?? 0) - (b.effort ?? 0)
-        : b.score - a.score,
+        : discoverSort === "optimal"
+          ? (optimalNow[b.id] ?? 0) - (optimalNow[a.id] ?? 0)
+          : b.score - a.score,
   );
 
   const openDetail = (id: string) => {
@@ -150,9 +160,11 @@ export function DiscoverScreen() {
             </div>
             <div className={s.weatherCell}>
               <div className={s.weatherValue} style={{ color: "var(--terracotta)" }}>
-                {sel.condition ?? (wx ? wx.windSpeed : "—")}
+                {heroOptimal?.trailConditions?.label ?? sel.condition ?? (wx ? wx.windSpeed : "—")}
               </div>
-              <div className={s.weatherLabel}>{sel.condition ? "CONDITION" : "WIND"}</div>
+              <div className={s.weatherLabel}>
+                {heroOptimal?.trailConditions ? "TRAIL" : sel.condition ? "CONDITION" : "WIND"}
+              </div>
             </div>
           </div>
 

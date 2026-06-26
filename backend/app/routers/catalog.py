@@ -5,6 +5,8 @@ cached it first fetches the nearest 50 from TrailAPI and caches them, so the cat
 as areas are browsed (within the request quota).
 """
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -12,11 +14,17 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.db import get_db
 from app.integrations.elevation import OpenMeteoElevation, UsgsElevation
+from app.integrations.precipitation import OpenMeteoPrecip
 from app.integrations.weather import WeatherClient
 from app.models import CatalogTrail
 from app.schemas.catalog import CatalogTrailOut
 from app.services.catalog_geometry import ensure_line, enrich_region
-from app.services.optimal_ride_time import score_optimal_window
+from app.services.optimal_ride_time import (
+    current_conditions_score,
+    score_now,
+    score_optimal_window,
+)
+from app.services.trail_conditions import assess_surface
 from app.services.trail_catalog import (
     cache_trails_near,
     count_nearby,
@@ -180,22 +188,82 @@ async def catalog_trail_weather(external_id: str, db: Session = Depends(get_db))
     return {"trail": external_id, "periods": trimmed}
 
 
+async def _surface_assessment(lat: float, lon: float, now: datetime) -> dict | None:
+    """Recent-precip trail-surface (tacky/mud) assessment, or None if precip is unavailable."""
+    try:
+        precip = await OpenMeteoPrecip().recent(lat, lon)
+        return assess_surface(precip["times"], precip["precip_mm"], now=now)
+    except Exception:  # noqa: BLE001 - surface is a bonus; never fail the caller on it
+        return None
+
+
 @router.get("/trails/{external_id}/optimal-time")
 async def catalog_trail_optimal_time(external_id: str, db: Session = Depends(get_db)) -> dict:
-    """Best time-of-day to ride: blends the NWS hourly forecast (riding conditions) with a
-    dawn/dusk wildlife-activity prior scaled by the trail's eBird score. Fails soft outside the US
-    (NWS-only): returns available=false with no curve so the screen shows its illustrative fallback.
+    """Best time-of-day to ride: blends the NWS hourly forecast (riding conditions, with a recent-
+    precip surface penalty) and a dawn/dusk wildlife-activity prior scaled by the trail's eBird
+    score. Fails soft outside the US (NWS-only): returns available=false with no curve, but still
+    reports trailConditions (Open-Meteo precip is global) so the screen's conditions read stays live.
     """
     trail = _get_catalog_or_404(db, external_id)
+    now = datetime.now(UTC)
     score = score_catalog_trails(db, [trail.id], buffer_m=_AREA_BUFFER_M).get(trail.id)
     trail_score = (score or {}).get("score", 0)
+
+    surface = await _surface_assessment(trail.lat, trail.lon, now)
+    surface_factor = surface["factor"] if surface else 1.0
+    trail_conditions = {"score": surface["score"], "label": surface["label"]} if surface else None
+
     try:
         hourly = await WeatherClient().forecast_hourly(trail.lat, trail.lon)
     except Exception:  # noqa: BLE001 - no US forecast (or NWS hiccup): degrade, don't error
         return {"trail": external_id, "available": False, "date": None, "hours": [],
-                "bestWindow": None, "bestWindowWhy": None, "window": None}
-    payload = score_optimal_window(hourly, trail.lat, trail.lon, trail_score)
-    return {"trail": external_id, **payload}
+                "bestWindow": None, "bestWindowWhy": None, "window": None,
+                "trailConditions": trail_conditions}
+    payload = score_optimal_window(
+        hourly, trail.lat, trail.lon, trail_score, now=now, surface_factor=surface_factor
+    )
+    return {"trail": external_id, **payload, "trailConditions": trail_conditions}
+
+
+@router.get("/optimal-now")
+async def catalog_optimal_now(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    radius_km: float = Query(40, ge=1, le=160),
+    limit: int = Query(60, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Rank nearby trails by how well *now* overlaps their optimal window (the optimal-now sort).
+
+    Weather and recent rain are regional, so the current conditions + surface are computed once for
+    the query point and reused across trails; the per-trail differentiator is each trail's wildlife
+    score and crepuscular timing. Fails soft: no NWS forecast -> rank on the wildlife/daylight term.
+    """
+    now = datetime.now(UTC)
+    surface = await _surface_assessment(lat, lon, now)
+    surface_factor = surface["factor"] if surface else 1.0
+    conditions_now = None
+    try:
+        hourly = await WeatherClient().forecast_hourly(lat, lon)
+        conditions_now = current_conditions_score(hourly, lat, lon, now=now, surface_factor=surface_factor)
+    except Exception:  # noqa: BLE001 - no US forecast: rank on wildlife/daylight alone
+        conditions_now = None
+
+    trails = nearby_trails(db, lat, lon, radius_km, limit)
+    scores = score_catalog_trails(db, [t.id for t in trails], buffer_m=_AREA_BUFFER_M)
+    ranked = [
+        {
+            "id": t.external_id,
+            "optimalNow": score_now(now, t.lat, t.lon, (scores.get(t.id) or {}).get("score", 0), conditions_now),
+        }
+        for t in trails
+    ]
+    ranked.sort(key=lambda r: r["optimalNow"], reverse=True)
+    return {
+        "trails": ranked,
+        "conditionsNow": conditions_now,
+        "trailConditions": {"score": surface["score"], "label": surface["label"]} if surface else None,
+    }
 
 
 @router.post("/backfill-history")

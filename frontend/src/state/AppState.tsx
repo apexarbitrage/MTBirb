@@ -11,7 +11,7 @@ import {
  * switch lives here.
  */
 
-type DiscoverSort = "wildlife" | "distance" | "effort";
+type DiscoverSort = "wildlife" | "distance" | "effort" | "optimal";
 type Dir = "asc" | "desc";
 
 interface AppState {
@@ -52,7 +52,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       discoverSort,
       cycleDiscoverSort: () =>
         setDiscoverSort((s) =>
-          s === "wildlife" ? "distance" : s === "distance" ? "effort" : "wildlife",
+          s === "wildlife"
+            ? "distance"
+            : s === "distance"
+              ? "effort"
+              : s === "effort"
+                ? "optimal"
+                : "wildlife",
         ),
       trailSort,
       trailDir,

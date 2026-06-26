@@ -136,10 +136,20 @@ crepuscular dawn/dusk prior from `services/solar.py` sun times, scaled by the tr
 `score` so a birdier trail's curve sits higher) - then a conditions-weighted `combined` score. The
 best window is the highest-summed run of hours near the day's peak. `GET
 /catalog/trails/{id}/optimal-time` serves the curve + window; it's the only place that fetches the
-hourly forecast (the list/detail stay fast). The model is pure/dependency-free and unit-tested
-(`test_optimal_ride_time.py`, `test_solar.py`); it's a first pass, not calibrated - no past-rain mud,
-no trail aspect/exposure, no time-stamped eBird effort yet. NWS is US-only, so the endpoint fails
-soft (`available:false`) and the screen shows an illustrative fallback outside the US.
+hourly forecast (the list/detail stay fast). The conditions axis also folds in a **trail-surface
+("tacky"/mud) factor** from recent precipitation (`services/trail_conditions.py`, fed by Open-Meteo's
+`past_days` precip via `integrations/precipitation.py` - keyless and *global*, so the surface read
+works even outside NWS coverage). That surface model is deliberately non-monotonic in rainfall: dry is
+loose/dusty, soaked is mud, and *tacky* (moist, drained) is the prime state; it yields a 0..100 score
++ label (Dry/Firm/Tacky/Wet/Muddy) shown as the Discover hero's "trail conditions" cell (replacing
+wind) and a 0..1 factor multiplied into riding conditions. `GET /catalog/optimal-now` ranks nearby
+trails by how well *now* overlaps each trail's window (the "Optimal now" sort on Discover + Trails):
+conditions + surface are computed once for the region (they're regional) and `score_now` blends them
+with each trail's crepuscular wildlife term. The model is pure/dependency-free and unit-tested
+(`test_optimal_ride_time.py`, `test_trail_conditions.py`, `test_solar.py`); still a first pass, not
+calibrated - no trail aspect/exposure, no time-stamped eBird effort yet. NWS is US-only, so the
+time-of-day curve fails soft (`available:false`) outside the US, but the Open-Meteo surface rating and
+the wildlife/daylight ranking still work there.
 
 ### Trail terrain metrics are two-tier (Open-Meteo, then USGS)
 

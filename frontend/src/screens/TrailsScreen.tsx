@@ -5,6 +5,7 @@ import { DifficultyMarker } from "../components/DifficultyMarker";
 import { BirdGlyph } from "../components/icons";
 import { useTrails } from "../data/TrailsProvider";
 import { useSpeciesTrails } from "../data/useSpeciesTrails";
+import { useOptimalNow } from "../data/useOptimalNow";
 import {
   TRAIL_SORT_CHIPS,
   TRAIL_SORT_LABELS,
@@ -24,6 +25,7 @@ export function TrailsScreen() {
   const { trailSort, trailDir, pickTrailSort, speciesFilter, setSpeciesFilter, setDetailTrailId } =
     useAppState();
   const speciesView = useSpeciesTrails(speciesFilter?.code ?? null, location.lat, location.lon);
+  const { scores: optimalNow } = useOptimalNow(location.lat, location.lon, trailSort === "optimal");
 
   const open = (id: string) => {
     setDetailTrailId(id);
@@ -117,7 +119,10 @@ export function TrailsScreen() {
 
   // --- Default view: all trails, sortable ---
   const sorted = [...trails].sort((a, b) => {
-    const c = compareTrails(a, b, trailSort);
+    const c =
+      trailSort === "optimal"
+        ? (optimalNow[a.id] ?? 0) - (optimalNow[b.id] ?? 0)
+        : compareTrails(a, b, trailSort);
     return trailDir === "asc" ? c : -c;
   });
   const arrow = trailDir === "asc" ? "↑" : "↓";
