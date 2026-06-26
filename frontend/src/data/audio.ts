@@ -41,7 +41,18 @@ export async function recordWavClip(
   seconds: number,
   onLevel?: (rms: number) => void,
 ): Promise<Blob> {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  // getUserMedia only exists in a secure context (https:// or localhost). Over plain HTTP on a
+  // LAN IP - e.g. opening the dev server from a phone - navigator.mediaDevices is undefined, so
+  // guard with a clear message instead of letting it throw "undefined is not an object".
+  const media = navigator.mediaDevices;
+  if (!media || typeof media.getUserMedia !== "function") {
+    throw new Error(
+      window.isSecureContext === false
+        ? "Microphone needs a secure connection — open the app over https:// or on localhost, not a plain http:// LAN address."
+        : "This browser doesn't support microphone capture.",
+    );
+  }
+  const stream = await media.getUserMedia({ audio: true });
   const AudioCtor =
     window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
   const ctx = new AudioCtor();

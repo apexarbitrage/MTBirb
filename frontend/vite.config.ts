@@ -1,9 +1,14 @@
+import basicSsl from "@vitejs/plugin-basic-ssl";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
   server: {
+    // Serve the dev server over HTTPS (self-signed cert via basic-ssl below) and bind to all
+    // interfaces, so opening it from a phone on the LAN is a secure context. The mic
+    // (navigator.mediaDevices) and precise geolocation only exist over https:// or on localhost.
+    host: true,
     proxy: {
       "/api": {
         target: "http://localhost:8000",
@@ -13,6 +18,7 @@ export default defineConfig({
     },
   },
   plugins: [
+    basicSsl(),
     react(),
     VitePWA({
       registerType: "autoUpdate",
