@@ -237,9 +237,15 @@ column will create a redundant duplicate index, not a missing one.
 - **Garmin export**: planned as a GPX/TCX file download, not a live device push (no public
   Garmin BLE course-transfer protocol exists, and Garmin Connect's Course API requires partner
   approval).
-- **"Fun drive" / twisty-road routing**: not built. No mapping API scores route curvature; this
-  will need a custom scoring layer over OSM road geometry (the open-source "Curvature" project
-  is the reference design) feeding a router like GraphHopper/OSRM/Valhalla.
+- **"Fun drive" / twisty-road routing** (`app/integrations/tomtom.py`): real, via TomTom's Routing
+  API `routeType=thrilling` (with `windingness`/`hilliness`) - it scores curvature for us, so no
+  custom OSM-curvature layer was needed. `GET /catalog/trails/{id}/drive` returns both the thrilling
+  and fastest routes (server-side; the key stays in `.env`, read via settings, 503 when unset). A
+  twistiness read is derived from the route geometry (`services/drive_route.curviness`, density-
+  invariant total-turning-per-km) and `sample_waypoints` thins the route for the **maps-app handoff**:
+  the `FunDriveNavScreen` "Start drive" opens Google Maps with those waypoints so the actual drive
+  follows the scenic route shown in-app. The screen renders an SVG route preview (no map tiles) +
+  the Fun-drive/Fastest toggle; real turn-by-turn is delegated to the maps app.
 
 ### Sensitive-species handling
 

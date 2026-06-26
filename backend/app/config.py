@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     ebird_api_key: str = ""
     weather_user_agent: str = "mtbirb (set WEATHER_USER_AGENT in .env)"
     rapidapi_key: str = ""  # for TrailAPI (RapidAPI); see app/integrations/trailapi.py
+    tomtom_api_key: str = ""  # for "fun drive" routing; see app/integrations/tomtom.py
 
 
 @lru_cache

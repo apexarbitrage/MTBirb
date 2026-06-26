@@ -182,7 +182,13 @@ export function DiscoverScreen() {
             <button className={`${s.actionBtn} ${s.actionPrimary}`} onClick={() => openDetail(sel.id)}>
               View trail
             </button>
-            <button className={`${s.actionBtn} ${s.actionSecondary}`} onClick={() => navigate("/navigate")}>
+            <button
+              className={`${s.actionBtn} ${s.actionSecondary}`}
+              onClick={() => {
+                setDetailTrailId(sel.id);
+                navigate("/navigate");
+              }}
+            >
               Navigate →
             </button>
           </div>
