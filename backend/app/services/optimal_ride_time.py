@@ -116,8 +116,22 @@ def _wildlife_activity_factor(
 # --- score composers ---------------------------------------------------------------------------
 
 
-def conditions_score(temp_f: float | None, wind_mph: float | None, pop_pct: float, daylight: float) -> int:
-    raw = _comfort_factor(temp_f) * _wind_factor(wind_mph) * _precip_factor(pop_pct) * daylight
+def conditions_score(
+    temp_f: float | None,
+    wind_mph: float | None,
+    pop_pct: float,
+    daylight: float,
+    surface: float = 1.0,
+) -> int:
+    """Riding conditions 0..100. `surface` is the trail-surface (tacky/mud) multiplier from
+    recent precipitation (see services/trail_conditions.py); 1.0 = no penalty / unknown."""
+    raw = (
+        _comfort_factor(temp_f)
+        * _wind_factor(wind_mph)
+        * _precip_factor(pop_pct)
+        * daylight
+        * surface
+    )
     return max(0, min(100, round(100 * raw)))
 
 
@@ -263,12 +277,58 @@ def _empty(available: bool) -> dict:
     }
 
 
+def _local_date(now: datetime, lon: float):
+    """The trail's local calendar date, approximated from solar time (lon/15h offset). Used where
+    we have no real timezone (the per-trail sort, which works globally)."""
+    return (now + timedelta(hours=lon / 15.0)).date()
+
+
+def current_conditions_score(
+    hourly: list[dict],
+    lat: float,
+    lon: float,
+    now: datetime | None = None,
+    surface_factor: float = 1.0,
+) -> int | None:
+    """Regional riding-conditions score for the hour covering `now`, or None if no forecast.
+
+    Computed once for a point (weather is regional) and reused across nearby trails by the sort."""
+    now = now or datetime.now(UTC)
+    parsed = [h for h in (_parse_hour(p) for p in hourly) if h is not None]
+    if not parsed:
+        return None
+    now_local = now.astimezone(parsed[0].dt.tzinfo)
+    sunrise, sunset = sun_times(lat, lon, now_local.date())
+    current = next((h for h in parsed if h.dt <= now < h.dt + timedelta(hours=1)), None)
+    if current is None:
+        future = [h for h in parsed if h.dt >= now]
+        current = future[0] if future else parsed[-1]
+    daylight = _daylight_factor(current.dt, sunrise, sunset, current.is_daytime)
+    return conditions_score(current.temp_f, current.wind_mph, current.pop_pct, daylight, surface_factor)
+
+
+def score_now(
+    now: datetime,
+    lat: float,
+    lon: float,
+    trail_score: int,
+    conditions_now: int | None,
+) -> int:
+    """How good *now* is for this trail: blends the regional conditions-now (already surface-scaled)
+    with the trail's own crepuscular wildlife activity. Falls back to wildlife alone with no
+    forecast. This is the rank used by the optimal-now sort."""
+    sunrise, sunset = sun_times(lat, lon, _local_date(now, lon))
+    wild = wildlife_score_hour(_wildlife_activity_factor(now, sunrise, sunset), trail_score)
+    return wild if conditions_now is None else combined_score(conditions_now, wild)
+
+
 def score_optimal_window(
     hourly: list[dict],
     lat: float,
     lon: float,
     trail_score: int,
     now: datetime | None = None,
+    surface_factor: float = 1.0,
 ) -> dict:
     """Score the target day's daylight hours and pick the best window. See module docstring."""
     now = now or datetime.now(UTC)
@@ -288,7 +348,7 @@ def score_optimal_window(
         daylight = _daylight_factor(h.dt, sunrise, sunset, h.is_daytime)
         if daylight <= 0:
             continue
-        cond = conditions_score(h.temp_f, h.wind_mph, h.pop_pct, daylight)
+        cond = conditions_score(h.temp_f, h.wind_mph, h.pop_pct, daylight, surface_factor)
         wild = wildlife_score_hour(_wildlife_activity_factor(h.dt, sunrise, sunset), trail_score)
         rows.append((h, cond, wild, combined_score(cond, wild)))
 

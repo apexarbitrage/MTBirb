@@ -21,6 +21,11 @@ export interface OptimalHour {
   isBest: boolean;
 }
 
+export interface TrailConditions {
+  score: number;
+  label: string; // Dry | Firm | Tacky | Wet | Muddy
+}
+
 export interface OptimalTime {
   available: boolean;
   date: string | null; // YYYY-MM-DD
@@ -28,6 +33,7 @@ export interface OptimalTime {
   bestWindow: string | null;
   bestWindowWhy: string | null;
   window: string | null;
+  trailConditions: TrailConditions | null;
 }
 
 interface OptimalTimeResponse extends OptimalTime {

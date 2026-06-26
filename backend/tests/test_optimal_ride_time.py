@@ -11,6 +11,7 @@ from app.services.optimal_ride_time import (
     _wind_factor,
     combined_score,
     conditions_score,
+    score_now,
     score_optimal_window,
     wildlife_score_hour,
 )
@@ -88,6 +89,30 @@ def test_conditions_score_rewards_clear_calm() -> None:
     assert clear > rainy
     assert 0 <= rainy <= clear <= 100
     assert clear >= 90
+
+
+def test_conditions_score_surface_multiplier() -> None:
+    # A muddy surface (low factor) drags conditions down from an otherwise perfect hour.
+    assert conditions_score(62, 5, 0, 1.0, surface=0.3) < conditions_score(62, 5, 0, 1.0, surface=1.0)
+
+
+def test_score_now_ranks_birdier_trail_higher() -> None:
+    now = datetime(2026, 6, 21, 13, 30, tzinfo=UTC)  # ~6:30 AM PDT, near SF sunrise
+    birdy = score_now(now, SF_LAT, SF_LON, 85, conditions_now=80)
+    quiet = score_now(now, SF_LAT, SF_LON, 30, conditions_now=80)
+    assert birdy > quiet
+
+
+def test_score_now_lower_conditions_lower_rank() -> None:
+    now = datetime(2026, 6, 21, 13, 30, tzinfo=UTC)
+    good = score_now(now, SF_LAT, SF_LON, 70, conditions_now=80)
+    muddy = score_now(now, SF_LAT, SF_LON, 70, conditions_now=30)
+    assert good > muddy
+
+
+def test_score_now_without_forecast_uses_wildlife() -> None:
+    now = datetime(2026, 6, 21, 13, 30, tzinfo=UTC)
+    assert score_now(now, SF_LAT, SF_LON, 80, conditions_now=None) > 0
 
 
 def test_wildlife_score_scales_with_trail_score() -> None:

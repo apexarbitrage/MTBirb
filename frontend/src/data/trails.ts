@@ -158,10 +158,11 @@ export function fmtTime(min: number): string {
   return h ? `${h}:${String(m).padStart(2, "0")}` : `${m} min`;
 }
 
-export type TrailSortKey = "sighting" | "difficulty" | "time" | "effort" | "features";
+export type TrailSortKey = "sighting" | "optimal" | "difficulty" | "time" | "effort" | "features";
 
 export const TRAIL_SORT_DEFAULT_DIR: Record<TrailSortKey, "asc" | "desc"> = {
   sighting: "desc",
+  optimal: "desc",
   difficulty: "asc",
   time: "asc",
   effort: "asc",
@@ -170,6 +171,7 @@ export const TRAIL_SORT_DEFAULT_DIR: Record<TrailSortKey, "asc" | "desc"> = {
 
 export const TRAIL_SORT_LABELS: Record<TrailSortKey, string> = {
   sighting: "Sighting probability",
+  optimal: "Optimal now",
   difficulty: "Difficulty",
   time: "Time to ride",
   effort: "Effort",
@@ -178,6 +180,7 @@ export const TRAIL_SORT_LABELS: Record<TrailSortKey, string> = {
 
 export const TRAIL_SORT_CHIPS: { key: TrailSortKey; label: string }[] = [
   { key: "sighting", label: "Sighting" },
+  { key: "optimal", label: "Optimal now" },
   { key: "difficulty", label: "Difficulty" },
   { key: "time", label: "Time to ride" },
   { key: "effort", label: "Effort" },
