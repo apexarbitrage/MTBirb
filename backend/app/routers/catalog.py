@@ -16,6 +16,7 @@ from app.integrations.weather import WeatherClient
 from app.models import CatalogTrail
 from app.schemas.catalog import CatalogTrailOut
 from app.services.catalog_geometry import ensure_line, enrich_region
+from app.services.optimal_ride_time import score_optimal_window
 from app.services.trail_catalog import (
     cache_trails_near,
     count_nearby,
@@ -177,6 +178,24 @@ async def catalog_trail_weather(external_id: str, db: Session = Depends(get_db))
         for p in periods[:12]
     ]
     return {"trail": external_id, "periods": trimmed}
+
+
+@router.get("/trails/{external_id}/optimal-time")
+async def catalog_trail_optimal_time(external_id: str, db: Session = Depends(get_db)) -> dict:
+    """Best time-of-day to ride: blends the NWS hourly forecast (riding conditions) with a
+    dawn/dusk wildlife-activity prior scaled by the trail's eBird score. Fails soft outside the US
+    (NWS-only): returns available=false with no curve so the screen shows its illustrative fallback.
+    """
+    trail = _get_catalog_or_404(db, external_id)
+    score = score_catalog_trails(db, [trail.id], buffer_m=_AREA_BUFFER_M).get(trail.id)
+    trail_score = (score or {}).get("score", 0)
+    try:
+        hourly = await WeatherClient().forecast_hourly(trail.lat, trail.lon)
+    except Exception:  # noqa: BLE001 - no US forecast (or NWS hiccup): degrade, don't error
+        return {"trail": external_id, "available": False, "date": None, "hours": [],
+                "bestWindow": None, "bestWindowWhy": None, "window": None}
+    payload = score_optimal_window(hourly, trail.lat, trail.lon, trail_score)
+    return {"trail": external_id, **payload}
 
 
 @router.post("/backfill-history")

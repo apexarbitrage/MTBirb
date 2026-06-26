@@ -10,6 +10,7 @@ import { TrailPhotoMap } from "../components/TrailPhotoMap";
 import { useCatalogDetail } from "../data/useCatalogDetail";
 import { useTrips } from "../data/useTrips";
 import { shortSky } from "../data/useTrailWeather";
+import { useOptimalTime } from "../data/useOptimalTime";
 import { TRAIL_HERO_IMG, fmtTime, normalizeDifficulty } from "../data/trails";
 import { useAppState } from "../state/AppState";
 import s from "./TrailDetailScreen.module.css";
@@ -29,6 +30,7 @@ export function TrailDetailScreen() {
   const { trail, linePoints, error, loading, species, areaRadiusKm, weather } =
     useCatalogDetail(detailTrailId);
   const { trips } = useTrips();
+  const { data: optimal } = useOptimalTime(detailTrailId);
   const [showLog, setShowLog] = useState(false);
 
   if (loading || error || !trail) {
@@ -118,6 +120,40 @@ export function TrailDetailScreen() {
               <div className={s.statLabel}>EST TIME</div>
             </button>
           </div>
+
+          {/* Live best-time-to-ride window (taps through to the full curve) */}
+          {optimal?.available && optimal.bestWindow && (
+            <button
+              onClick={() => { setDetailTrailId(trail.id); navigate("/optimal-time"); }}
+              style={{
+                width: "100%",
+                marginTop: 10,
+                padding: "11px 14px",
+                borderRadius: 12,
+                border: "1px solid var(--sage-pale)",
+                background: "var(--sage-tint)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 10,
+                cursor: "pointer",
+                textAlign: "left",
+              }}
+            >
+              <div>
+                <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--sage)" }}>
+                  BEST TIME TO RIDE
+                </div>
+                <div style={{ fontWeight: 800, fontSize: 16, color: "var(--ink)" }}>
+                  {optimal.bestWindow}
+                </div>
+                {optimal.bestWindowWhy && (
+                  <div style={{ fontSize: 12, color: "var(--text-muted-2)" }}>{optimal.bestWindowWhy}</div>
+                )}
+              </div>
+              <span style={{ color: "var(--sage)", fontSize: 18 }}>→</span>
+            </button>
+          )}
 
           <button
             onClick={() => setShowLog(true)}
