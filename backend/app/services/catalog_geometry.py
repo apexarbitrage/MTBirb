@@ -168,25 +168,20 @@ async def ensure_line(
     `force` re-assembles even when a line already exists (e.g. to replace an older fragment with
     a fuller stitched line); the trail's elevation metrics are cleared so they get recomputed.
     """
-    has_line = trail.line_geom is not None
-    if has_line and not force and trail.surface is not None:
+    # Fast path: an existing line needs no network. Surface (an OSM-tag bonus) is summarised only
+    # when we actually (re)assemble geometry - never as a blocking Overpass call on every detail
+    # open. Use the bulk `enrich-geometry?force=true` job to (re)populate surface for lined trails.
+    if trail.line_geom is not None and not force:
         return True
     client = client or OverpassClient()
     points, ways_used = await assemble_line(client, trail.name, trail.lon, trail.lat, trail.length_mi)
-
-    surface = summarize_surface(ways_used)
-    trail.surface = surface["surface"]
-    trail.mtb_scale = surface["mtb_scale"]
-
-    if has_line and not force:
-        # Geometry is already good - this pass only backfills the surface summary.
-        db.commit()
-        return True
     if not points:
-        db.commit()  # persist any surface we did learn, even without a usable line
         return False
     coords = ", ".join(f"{lon} {lat}" for lon, lat in points)
     trail.line_geom = WKTElement(f"LINESTRING({coords})", srid=4326)
+    summary = summarize_surface(ways_used)
+    trail.surface = summary["surface"]
+    trail.mtb_scale = summary["mtb_scale"]
     if force:
         trail.elev_source = None  # geometry changed; metrics are stale
     db.commit()

@@ -145,12 +145,8 @@ async def ensure_metrics(db: Session, trail: CatalogTrail, client, *, force: boo
     """
     if trail.line_geom is None:
         return False
-    if not force and trail.elev_source == _TOO_SHORT:
-        return False
-    # Re-run if this tier already produced the metrics, unless a newer field (aspect) is missing -
-    # that lets trails computed before aspect existed backfill it on the next detail open.
-    if not force and trail.elev_source == client.source and trail.aspect is not None:
-        return False
+    if not force and trail.elev_source in (_TOO_SHORT, client.source):
+        return False  # already this tier (or a known-too-short fragment) - nothing to do
     points = line_points(db, trail.id)
     if not points or len(points) < 2:
         return False
@@ -178,12 +174,16 @@ async def ensure_metrics(db: Session, trail: CatalogTrail, client, *, force: boo
     trail.high_point_ft = metrics["high_point_ft"]
     trail.low_point_ft = metrics["low_point_ft"]
     trail.longest_climb_mi = metrics["longest_climb_mi"]
-    try:
-        aspect = await compute_aspect(client, samples, client.source)
-        trail.aspect = aspect["aspect"]
-        trail.sun_exposure = aspect["sun_exposure"]
-    except Exception:  # noqa: BLE001 - aspect is a bonus; keep the elevation metrics on failure
-        pass
+    # Aspect needs its own DEM neighbour samples (extra lookups), so only compute it when missing -
+    # the coarse Open-Meteo pass sets it once and the USGS refine then skips it (aspect doesn't need
+    # 1m precision), keeping the per-detail refinement fast.
+    if trail.aspect is None:
+        try:
+            aspect = await compute_aspect(client, samples, client.source)
+            trail.aspect = aspect["aspect"]
+            trail.sun_exposure = aspect["sun_exposure"]
+        except Exception:  # noqa: BLE001 - aspect is a bonus; keep the elevation metrics on failure
+            pass
     trail.elev_source = client.source
     db.commit()
     return True
