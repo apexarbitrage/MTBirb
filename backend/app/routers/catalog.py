@@ -24,7 +24,7 @@ from app.services.optimal_ride_time import (
     score_now,
     score_optimal_window,
 )
-from app.services.trail_conditions import assess_surface
+from app.services.trail_conditions import assess_surface, grade_pct, per_trail_surface_factor
 from app.services.trail_catalog import (
     cache_trails_near,
     count_nearby,
@@ -210,7 +210,12 @@ async def catalog_trail_optimal_time(external_id: str, db: Session = Depends(get
     trail_score = (score or {}).get("score", 0)
 
     surface = await _surface_assessment(trail.lat, trail.lon, now)
-    surface_factor = surface["factor"] if surface else 1.0
+    # Adjust the regional surface for this trail's own drainage (aspect/grade/surface), so a
+    # shaded dirt trail reads wetter than a sun-baked rocky one after the same rain.
+    base_factor = surface["factor"] if surface else 1.0
+    surface_factor = per_trail_surface_factor(
+        base_factor, trail.sun_exposure, grade_pct(trail.avg_up_grade), trail.surface
+    )
     trail_conditions = {"score": surface["score"], "label": surface["label"]} if surface else None
 
     try:
@@ -235,33 +240,34 @@ async def catalog_optimal_now(
 ) -> dict:
     """Rank nearby trails by how well *now* overlaps their optimal window (the optimal-now sort).
 
-    Weather and recent rain are regional, so the current conditions + surface are computed once for
-    the query point and reused across trails; the per-trail differentiator is each trail's wildlife
-    score and crepuscular timing. Fails soft: no NWS forecast -> rank on the wildlife/daylight term.
+    The weather and recent rain are regional (computed once), but each trail's surface diverges by
+    its own drainage (aspect/grade/surface) - so a shaded dirt trail ranks below a sun-baked rocky
+    one nearby after rain. The other per-trail differentiator is wildlife score + crepuscular
+    timing. Fails soft: no NWS forecast -> rank on the wildlife/daylight term.
     """
     now = datetime.now(UTC)
     surface = await _surface_assessment(lat, lon, now)
-    surface_factor = surface["factor"] if surface else 1.0
-    conditions_now = None
+    base_factor = surface["factor"] if surface else 1.0
+    # Weather-only conditions for the region (no surface yet); surface is applied per trail below.
+    weather_now = None
     try:
         hourly = await WeatherClient().forecast_hourly(lat, lon)
-        conditions_now = current_conditions_score(hourly, lat, lon, now=now, surface_factor=surface_factor)
+        weather_now = current_conditions_score(hourly, lat, lon, now=now, surface_factor=1.0)
     except Exception:  # noqa: BLE001 - no US forecast: rank on wildlife/daylight alone
-        conditions_now = None
+        weather_now = None
 
     trails = nearby_trails(db, lat, lon, radius_km, limit)
     scores = score_catalog_trails(db, [t.id for t in trails], buffer_m=_AREA_BUFFER_M)
-    ranked = [
-        {
-            "id": t.external_id,
-            "optimalNow": score_now(now, t.lat, t.lon, (scores.get(t.id) or {}).get("score", 0), conditions_now),
-        }
-        for t in trails
-    ]
+    ranked = []
+    for t in trails:
+        factor = per_trail_surface_factor(base_factor, t.sun_exposure, grade_pct(t.avg_up_grade), t.surface)
+        cond = round(weather_now * factor) if weather_now is not None else None
+        trail_score = (scores.get(t.id) or {}).get("score", 0)
+        ranked.append({"id": t.external_id, "optimalNow": score_now(now, t.lat, t.lon, trail_score, cond)})
     ranked.sort(key=lambda r: r["optimalNow"], reverse=True)
     return {
         "trails": ranked,
-        "conditionsNow": conditions_now,
+        "conditionsNow": weather_now,
         "trailConditions": {"score": surface["score"], "label": surface["label"]} if surface else None,
     }
 

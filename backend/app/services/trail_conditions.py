@@ -78,3 +78,59 @@ def assess_surface(
         "loadMm": round(load, 1),
         "rainingNow": raining,
     }
+
+
+# --- per-trail differentiation -----------------------------------------------------------------
+# The assessment above is regional (recent rain over an area). Nearby trails diverge by how fast
+# each *sheds* that water: a sun-baked, steep, rocky trail dries far quicker than a shaded, flat,
+# dirt one. We turn the trail's aspect/grade/surface into a 0..1 "drainage" (0.5 = neutral) and use
+# it to recover (or worsen) the regional wetness deficit per trail. The effect vanishes when the
+# area is dry (no deficit), and grows the wetter it is - exactly where trails actually differ.
+
+# Additive drainage contribution by OSM surface (title-cased as `summarize_surface` returns them).
+_SURFACE_DRAINAGE = {
+    "Rock": 0.30, "Paved": 0.30, "Asphalt": 0.30, "Concrete": 0.30,
+    "Gravel": 0.25, "Fine Gravel": 0.25, "Pebblestone": 0.25,
+    "Compacted": 0.15, "Sand": 0.10, "Unpaved": 0.05,
+    "Dirt": 0.0, "Ground": 0.0, "Earth": 0.0,
+    "Soil": -0.05, "Grass": -0.10, "Clay": -0.20, "Mud": -0.25,
+}
+# How much of the wetness deficit a fully-draining trail recovers (and a non-draining one loses).
+_TERRAIN_RECOVERY = 1.0
+
+
+def grade_pct(grade: str | None) -> float | None:
+    """Parse a stored grade string like "10.0%" into a number, or None."""
+    if not grade:
+        return None
+    try:
+        return float(grade.rstrip("%"))
+    except ValueError:
+        return None
+
+
+def trail_drainage(
+    sun_exposure: float | None, grade: float | None, surface: str | None
+) -> float:
+    """How fast a trail sheds water, 0..1 (0.5 = neutral). Sunnier, steeper, rockier -> higher."""
+    d = 0.5
+    if sun_exposure is not None:
+        d += (sun_exposure - 0.5) * 0.5  # ±0.25 from aspect
+    if grade is not None:
+        d += min(max(grade, 0.0) / 40.0, 1.0) * 0.25  # steeper drains
+    d += _SURFACE_DRAINAGE.get(surface or "", 0.0)
+    return max(0.0, min(1.0, d))
+
+
+def per_trail_surface_factor(
+    base_factor: float,
+    sun_exposure: float | None,
+    grade: float | None,
+    surface: str | None,
+) -> float:
+    """Adjust the regional surface factor for one trail's drainage. Identity when the area is dry
+    (base_factor ~1.0); spreads trails apart as it gets wetter."""
+    drainage = trail_drainage(sun_exposure, grade, surface)
+    deficit = 1.0 - base_factor
+    factor = base_factor + deficit * (drainage - 0.5) * _TERRAIN_RECOVERY
+    return max(0.05, min(1.0, factor))

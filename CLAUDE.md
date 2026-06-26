@@ -144,10 +144,13 @@ loose/dusty, soaked is mud, and *tacky* (moist, drained) is the prime state; it 
 + label (Dry/Firm/Tacky/Wet/Muddy) shown as the Discover hero's "trail conditions" cell (replacing
 wind) and a 0..1 factor multiplied into riding conditions. `GET /catalog/optimal-now` ranks nearby
 trails by how well *now* overlaps each trail's window (the "Optimal now" sort on Discover + Trails):
-conditions + surface are computed once for the region (they're regional) and `score_now` blends them
-with each trail's crepuscular wildlife term. The model is pure/dependency-free and unit-tested
+weather is computed once for the region, but each trail's surface diverges by its own **drainage**
+(`per_trail_surface_factor`: aspect/sun, grade, and OSM surface recover or worsen the regional
+wetness deficit - a shaded dirt trail reads muddier than a sun-baked rocky one nearby), and
+`score_now` blends that with the trail's crepuscular wildlife term. The same per-trail factor scales
+each trail's own optimal-time curve. The model is pure/dependency-free and unit-tested
 (`test_optimal_ride_time.py`, `test_trail_conditions.py`, `test_solar.py`); still a first pass, not
-calibrated - no trail aspect/exposure, no time-stamped eBird effort yet. NWS is US-only, so the
+calibrated - aspect resolves best on USGS (US) trails, no time-stamped eBird effort yet. NWS is US-only, so the
 time-of-day curve fails soft (`available:false`) outside the US, but the Open-Meteo surface rating and
 the wildlife/daylight ranking still work there.
 
@@ -179,8 +182,8 @@ per-trail differentiator the optimal-now sort will later use (north-facing trail
 shaded/wetter). It recomputes when `aspect` is null even on an already-`usgs` trail, so older trails
 backfill on detail open. Independently, `ensure_line` aggregates the matched OSM ways' tags
 (`osm.summarize_surface`) into a **surface** type and **mtb:scale** technical rating, backfilling
-them on detail open when null. All of these surface on the Trail-detail terrain card; the
-optimal-now sort doesn't fold aspect/surface in yet (a deliberate next step).
+them on detail open when null. All of these surface on the Trail-detail terrain card and feed the
+optimal-now sort's per-trail drainage (see `per_trail_surface_factor` below).
 
 ### Reassembling full trails from OSM (catalog_geometry.py)
 
