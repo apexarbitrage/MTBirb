@@ -339,10 +339,22 @@ export function TrailDetailScreen() {
 
       {/* Action bar */}
       <div className={s.actionBar}>
-        <button className={s.garminBtn} aria-label="Export to Garmin">
-          <div style={{ width: 18, height: 13, border: "2px solid var(--forest)", borderRadius: 3 }} />
-          <span className={s.garminLabel}>GARMIN</span>
-        </button>
+        {linePoints && linePoints.length > 1 ? (
+          <a
+            className={s.garminBtn}
+            href={`/api/catalog/trails/${trail.id}/export.gpx`}
+            download
+            aria-label="Export GPX course for Garmin"
+          >
+            <div style={{ width: 18, height: 13, border: "2px solid var(--forest)", borderRadius: 3 }} />
+            <span className={s.garminLabel}>GARMIN</span>
+          </a>
+        ) : (
+          <button className={s.garminBtn} disabled aria-label="No route to export" style={{ opacity: 0.4 }}>
+            <div style={{ width: 18, height: 13, border: "2px solid var(--forest)", borderRadius: 3 }} />
+            <span className={s.garminLabel}>GARMIN</span>
+          </button>
+        )}
         <button className={s.navBtn} onClick={() => navigate("/navigate")}>
           Navigate to trailhead →
         </button>
