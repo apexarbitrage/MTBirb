@@ -7,7 +7,7 @@ as areas are browsed (within the request quota).
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,7 @@ from app.models import CatalogTrail
 from app.schemas.catalog import CatalogTrailOut
 from app.services.catalog_geometry import ensure_line, enrich_region
 from app.services.drive_route import curviness, sample_waypoints
+from app.services.gpx import build_gpx, slugify
 from app.services.optimal_ride_time import (
     current_conditions_score,
     score_now,
@@ -317,6 +318,23 @@ async def catalog_trail_drive(
         "fastest": fastest_leg,
         "extraMin": fun_leg["durationMin"] - fastest_leg["durationMin"],
     }
+
+
+@router.get("/trails/{external_id}/export.gpx")
+async def export_trail_gpx(external_id: str, db: Session = Depends(get_db)) -> Response:
+    """Download the trail's OSM line as a GPX course (for Garmin Connect, Strava, etc.)."""
+    trail = _get_catalog_or_404(db, external_id)
+    points = line_points(db, trail.id)
+    if not points:
+        raise HTTPException(status_code=404, detail="this trail has no mapped line to export")
+    miles = trail.metric_length_mi or trail.length_mi
+    desc = " · ".join(p for p in (trail.difficulty, f"{miles} mi" if miles else None) if p) or None
+    gpx = build_gpx(trail.name, points, desc=desc)
+    return Response(
+        content=gpx,
+        media_type="application/gpx+xml",
+        headers={"Content-Disposition": f'attachment; filename="{slugify(trail.name)}.gpx"'},
+    )
 
 
 @router.post("/backfill-history")

@@ -227,16 +227,19 @@ column will create a redundant duplicate index, not a missing one.
   so the API runs without them and the endpoint returns 503); installing it pins `numpy<2` because
   `tflite-runtime` is built against the numpy 1.x ABI. The client records 48 kHz mono WAV so the
   server needs no ffmpeg.
-- **Trailforks**: an API request is pending (free/non-profit tier). Not yet integrated.
+- **Trailforks**: not pursued - OSM geometry plus the rest of the stack covers what we'd have used
+  it for, so we dropped it rather than wait on their API approval.
 - **Strava / AllTrails**: not integrated, and not just because they're unbuilt - both carry real
   ToS constraints (Strava's API agreement restricts aggregate/heatmap use of other users' data;
   AllTrails has no public self-serve API). The project's data-source strategy is open data
   (OSM trail geometry, user-uploaded GPX) first, with scraping minimized in favor of open
   alternatives even at some cost to data quality. Don't add a scraper for these without
   checking in - it's a deliberate, revisitable call, not an oversight.
-- **Garmin export**: planned as a GPX/TCX file download, not a live device push (no public
-  Garmin BLE course-transfer protocol exists, and Garmin Connect's Course API requires partner
-  approval).
+- **Garmin export** (`app/services/gpx.py`): real, as a **GPX course download** (not a live device
+  push - no public Garmin course-transfer protocol exists). `GET /catalog/trails/{id}/export.gpx`
+  streams the trail's OSM line as a GPX `<trk>` (lat/lon; Garmin recomputes elevation for courses);
+  the Trail-detail "GARMIN" button is a same-origin `<a download>`. The file imports into Garmin
+  Connect and also works with Strava/Komoot/RideWithGPS/Wahoo.
 - **"Fun drive" / twisty-road routing** (`app/integrations/tomtom.py`): real, via TomTom's Routing
   API `routeType=thrilling` (with `windingness`/`hilliness`) - it scores curvature for us, so no
   custom OSM-curvature layer was needed. `GET /catalog/trails/{id}/drive` returns both the thrilling
