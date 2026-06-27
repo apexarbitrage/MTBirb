@@ -11,9 +11,9 @@ import { useTrailWeather, shortSky } from "../data/useTrailWeather";
 import { useOptimalTime } from "../data/useOptimalTime";
 import { useOptimalNow } from "../data/useOptimalNow";
 import { TRAIL_HERO_IMG, scoreColor, scoreChipBg } from "../data/trails";
-import { PROFILE } from "../data/profile";
 import { buildGreeting, formatEyebrowDate } from "../data/greeting";
 import { useAppState } from "../state/AppState";
+import { useProfile } from "../state/ProfileContext";
 import common from "../styles/common.module.css";
 import s from "./DiscoverScreen.module.css";
 
@@ -39,6 +39,7 @@ export function DiscoverScreen() {
   const selSlug = byId(discoverSelectedId)?.id ?? trails[0]?.id;
   const { current: wx } = useTrailWeather(selSlug);
   const { data: heroOptimal } = useOptimalTime(selSlug);
+  const { profile } = useProfile();
   // Optimal-now ranking (only fetched while that sort is active).
   const { scores: optimalNow } = useOptimalNow(
     location.lat,
@@ -87,7 +88,7 @@ export function DiscoverScreen() {
         </div>
         <div className={common.title}>
           {buildGreeting({
-            firstName: PROFILE.firstName,
+            firstName: profile?.firstName ?? "Rider",
             date: now,
             sky: wx ? shortSky(wx.shortForecast) : null,
             condition: sel.condition,

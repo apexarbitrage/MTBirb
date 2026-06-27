@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BottomNav } from "../components/BottomNav";
-import { BirdGlyph } from "../components/icons";
+import { BirdGlyph, HeartIcon } from "../components/icons";
 import { CenterMessage } from "../components/CenterMessage";
 import { useTrails } from "../data/TrailsProvider";
 import { useNearbySpecies, type NearbySpeciesItem } from "../data/useNearbySpecies";
 import { likelihoodColor } from "../data/trails";
 import { useAppState } from "../state/AppState";
+import { useProfile } from "../state/ProfileContext";
 import common from "../styles/common.module.css";
 import s from "./TargetingScreen.module.css";
 
@@ -16,6 +17,7 @@ export function TargetingScreen() {
   const navigate = useNavigate();
   const { location } = useTrails();
   const { setSpeciesFilter } = useAppState();
+  const { isWishlisted, toggleWishlist } = useProfile();
   const [segment, setSegment] = useState(0);
   // Selection is tagged with its segment so switching modes falls back to that mode's top pick.
   const [selected, setSelected] = useState<{ seg: number; item: NearbySpeciesItem } | null>(null);
@@ -120,7 +122,31 @@ export function TargetingScreen() {
         )}
       </div>
 
-      <div className={s.applyBar}>
+      <div className={s.applyBar} style={{ display: "flex", gap: 10 }}>
+        {usesPicker && active && (
+          <button
+            onClick={() => toggleWishlist({ code: active.species_code, name: active.common_name })}
+            aria-label={isWishlisted(active.species_code) ? "Remove from wishlist" : "Add to wishlist"}
+            style={{
+              flex: "none",
+              width: 52,
+              height: 52,
+              borderRadius: "var(--radius-card)",
+              border: "1.5px solid var(--terracotta)",
+              background: isWishlisted(active.species_code) ? "var(--terracotta)" : "var(--white)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+            }}
+          >
+            <HeartIcon
+              color={isWishlisted(active.species_code) ? "#fff" : "var(--terracotta)"}
+              filled={isWishlisted(active.species_code)}
+              size={22}
+            />
+          </button>
+        )}
         <button className={s.applyBtn} onClick={apply} disabled={usesPicker && !active}>
           {applyLabel}
         </button>

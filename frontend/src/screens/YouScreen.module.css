@@ -74,37 +74,3 @@
   padding: 7px 12px;
   border-radius: var(--radius-pill);
 }
-
-.connRow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px;
-}
-.connRow:not(:last-child) {
-  border-bottom: 1px solid var(--hairline);
-}
-
-.connBadge {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  font-weight: 800;
-  font-family: var(--font-mono);
-  flex: none;
-}
-
-.connName {
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.connStatus {
-  font-size: 12px;
-  color: var(--success);
-  font-weight: 600;
-}

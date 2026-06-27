@@ -82,12 +82,20 @@ now runs on the **live backend**, not the design's static sample data:
   records species (checked off the trail's eBird birds or typed in) and geotagged photos
   (`exifr` reads EXIF GPS client-side; only a downscaled thumbnail + coords are kept), mapped onto
   the trail line.
+- You is the rider's own data: a first-load **profile** (name + optional photo), **favorite trails**
+  (the ♥ beside "Log this ride" on Trail detail), a **bird wishlist** (the ♥ beside "Best trails
+  for…" on Birbs - tapping a saved bird re-runs the species ranking via `speciesFilter`), and a
+  **logged-birds** catalogue derived from `trips[].birds`. Live stats (rides/miles/birds/life list)
+  come from `useTrips`. The profile + favorites + wishlist persist to **localStorage** via
+  `ProfileContext` (no accounts → per-device = one user; a future accounts layer could sync it); the
+  profile sheet (`ProfileSheet`) doubles as the first-load onboarding gate (`App.tsx` renders it when
+  `profile === null`). Logged birds and stats are backend-derived, so they need no extra storage.
 Bird ID records a mic clip and runs it through BirdNET (`POST /birdnet/identify`). Optimal time
 is live too: its dual curve, best window, and hourly strip come from the per-hour ride-time model
 (`GET /catalog/trails/{id}/optimal-time` via `useOptimalTime`), which also feeds the Discover hero
 window and a Trail-detail card; it falls back to an illustrative sample outside the US (no NWS
-hourly forecast). Still static/illustrative: the You tab. `src/data/trails.ts` now holds just the
-shared `Trail` type + helpers, not sample rows.
+hourly forecast). With the You tab now live, every screen runs on real data - no screen is purely
+static. `src/data/trails.ts` now holds just the shared `Trail` type + helpers, not sample rows.
 
 - `src/screens/` - one component + co-located CSS Module per screen, routed in `src/App.tsx`
   (React Router). Flow screens have no bottom nav and use `BackButton`.
@@ -97,6 +105,9 @@ shared `Trail` type + helpers, not sample rows.
 - `src/state/AppState.tsx` - React Context holding cross-screen state (Discover hero/sort, Trails
   sort/dir, the Targeting→Trails species filter, the Trail-detail subject). Screen-local UI state
   stays in the screens.
+- `src/state/ProfileContext.tsx` - the rider's localStorage-backed profile, favorite trails, and
+  bird wishlist (keys `mtbirb.profile`/`mtbirb.favorites`/`mtbirb.wishlist`), exposed via
+  `useProfile()`. This is the only client-persisted state; everything else lives in the backend.
 - `src/data/trails.ts` - the shared `Trail` type, the catalog→Trail adapter, and the ported
   sort/format/score helpers (the static sample rows are gone). `src/data/use*.ts` are the backend
   hooks (trails, catalog detail, nearby species, species-ranked trails, trips, geolocation).

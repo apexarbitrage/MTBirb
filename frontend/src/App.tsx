@@ -9,7 +9,9 @@ import { TrailDetailScreen } from "./screens/TrailDetailScreen";
 import { OptimalTimeScreen } from "./screens/OptimalTimeScreen";
 import { FunDriveNavScreen } from "./screens/FunDriveNavScreen";
 import { BirdIdScreen } from "./screens/BirdIdScreen";
+import { ProfileSheet } from "./components/ProfileSheet";
 import { useAppState } from "./state/AppState";
+import { useProfile } from "./state/ProfileContext";
 
 /** Legacy /catalog/:id deep links now resolve to the unified trail detail. */
 function CatalogRedirect() {
@@ -24,6 +26,7 @@ function CatalogRedirect() {
 }
 
 export function App() {
+  const { profile } = useProfile();
   return (
     <div className="app-shell">
       <Routes>
@@ -42,6 +45,8 @@ export function App() {
         <Route path="/catalog/:id" element={<CatalogRedirect />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      {/* First-load onboarding: prompt for a name + photo before using the app. */}
+      {!profile && <ProfileSheet onboarding onClose={() => {}} />}
     </div>
   );
 }

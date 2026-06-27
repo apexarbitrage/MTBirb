@@ -12,7 +12,9 @@ import { useTrips } from "../data/useTrips";
 import { shortSky } from "../data/useTrailWeather";
 import { useOptimalTime } from "../data/useOptimalTime";
 import { TRAIL_HERO_IMG, fmtTime, normalizeDifficulty } from "../data/trails";
+import { HeartIcon } from "../components/icons";
 import { useAppState } from "../state/AppState";
+import { useProfile } from "../state/ProfileContext";
 import s from "./TrailDetailScreen.module.css";
 
 function elevationPaths(elev: number[]) {
@@ -47,6 +49,7 @@ export function TrailDetailScreen() {
     useCatalogDetail(detailTrailId);
   const { trips } = useTrips();
   const { data: optimal } = useOptimalTime(detailTrailId);
+  const { isFavorite, toggleFavorite } = useProfile();
   const [showLog, setShowLog] = useState(false);
 
   if (loading || error || !trail) {
@@ -171,23 +174,41 @@ export function TrailDetailScreen() {
             </button>
           )}
 
-          <button
-            onClick={() => setShowLog(true)}
-            style={{
-              width: "100%",
-              marginTop: 14,
-              padding: "13px",
-              borderRadius: 12,
-              border: "1.5px solid var(--terracotta)",
-              background: "var(--terracotta-tint)",
-              color: "var(--terracotta)",
-              fontWeight: 800,
-              fontSize: 15,
-              cursor: "pointer",
-            }}
-          >
-            ＋ Log this ride
-          </button>
+          <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+            <button
+              onClick={() => toggleFavorite({ id: trail.id, name: trail.name, difficulty: trail.difficulty, miles })}
+              aria-label={isFavorite(trail.id) ? "Remove from favorites" : "Save to favorites"}
+              style={{
+                flex: "none",
+                width: 52,
+                borderRadius: 12,
+                border: "1.5px solid var(--terracotta)",
+                background: isFavorite(trail.id) ? "var(--terracotta)" : "var(--terracotta-tint)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+              }}
+            >
+              <HeartIcon color={isFavorite(trail.id) ? "#fff" : "var(--terracotta)"} filled={isFavorite(trail.id)} size={21} />
+            </button>
+            <button
+              onClick={() => setShowLog(true)}
+              style={{
+                flex: 1,
+                padding: "13px",
+                borderRadius: 12,
+                border: "1.5px solid var(--terracotta)",
+                background: "var(--terracotta-tint)",
+                color: "var(--terracotta)",
+                fontWeight: 800,
+                fontSize: 15,
+                cursor: "pointer",
+              }}
+            >
+              ＋ Log this ride
+            </button>
+          </div>
 
           {/* Elevation (only when a mapped line produced a profile) */}
           {hasElevation && (

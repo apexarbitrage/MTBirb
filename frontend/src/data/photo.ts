@@ -15,7 +15,7 @@ export interface GeoPhoto {
 
 const MAX_DIM = 320;
 
-async function makeThumb(file: File): Promise<string> {
+export async function makeThumb(file: File): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {

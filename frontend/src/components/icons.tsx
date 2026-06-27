@@ -8,6 +8,19 @@ interface NavIconProps {
   size?: number;
 }
 
+export function HeartIcon({ color, size = 20, filled = false }: NavIconProps & { filled?: boolean }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      style={{ display: "block", fill: filled ? color : "none", stroke: color, strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }}
+    >
+      <path d="M12 20.5 4.3 12.8a4.6 4.6 0 0 1 6.5-6.5l1.2 1.2 1.2-1.2a4.6 4.6 0 0 1 6.5 6.5Z" />
+    </svg>
+  );
+}
+
 export function BinocularsIcon({ color, size = 21 }: NavIconProps) {
   return (
     <svg
@@ -103,34 +116,5 @@ export function SearchIcon({ innerFill = "#fff", size = 18 }: { innerFill?: stri
       <circle cx="10.5" cy="10.5" r="3.6" fill={innerFill} />
       <rect x="15" y="15.5" width="7" height="2.6" rx="1.3" transform="rotate(45 15 15.5)" fill="var(--terracotta)" />
     </svg>
-  );
-}
-
-/** Green circular checkmark used in Connections tiles. */
-export function CheckBadge({ size = 18 }: { size?: number }) {
-  return (
-    <div
-      style={{
-        width: size,
-        height: size,
-        borderRadius: "50%",
-        background: "var(--success)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flex: "none",
-      }}
-    >
-      <div
-        style={{
-          width: 6,
-          height: 10,
-          borderRight: "2.5px solid #fff",
-          borderBottom: "2.5px solid #fff",
-          transform: "rotate(45deg)",
-          marginTop: -2,
-        }}
-      />
-    </div>
   );
 }
