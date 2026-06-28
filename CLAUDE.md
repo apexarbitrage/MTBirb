@@ -59,7 +59,8 @@ backend over HTTP, proxied under `/api` in dev (see `frontend/vite.config.ts`).
 
 - `app/models/` - SQLAlchemy models. `Trail` (LineString geometry + difficulty/features/source
   metadata) and `WildlifeSighting` (a cached species observation, currently eBird-sourced, with
-  Point geometry).
+  Point geometry). Also `CatalogTrail` (the TrailAPI catalog row), `Trip` (a logged ride), and
+  `TrailPhoto` (a rider's uploaded hero photo bytes, one global row per trail - no accounts yet).
 - `app/integrations/` - one client per third-party data source (`ebird.py`, `weather.py`,
   `birdnet.py`, `osm.py`, `trailapi.py`, `elevation.py`). Each wraps a single external API; this
   is where new data sources get added. `elevation.py` holds two interchangeable DEM clients
@@ -89,7 +90,12 @@ now runs on the **live backend**, not the design's static sample data:
   come from `useTrips`. The profile + favorites + wishlist persist to **localStorage** via
   `ProfileContext` (no accounts → per-device = one user; a future accounts layer could sync it); the
   profile sheet (`ProfileSheet`) doubles as the first-load onboarding gate (`App.tsx` renders it when
-  `profile === null`). Logged birds and stats are backend-derived, so they need no extra storage.
+  `profile === null`). Logged birds and stats are backend-derived, so they need no extra storage. A
+  rider can also set their **own hero photo** for a trail by tapping the image on Trail detail; unlike
+  the above, that photo lives in the **backend** (`trail_photos` table, one global photo per trail -
+  shared across devices), uploaded as a downscaled JPEG and served from `GET
+  /catalog/trails/{id}/photo`. It overrides the stock hero on Trail detail and the Discover hero
+  (chosen via the `photoVersion` cache-buster the catalog responses carry).
 Bird ID records a mic clip and runs it through BirdNET (`POST /birdnet/identify`). Optimal time
 is live too: its dual curve, best window, and hourly strip come from the per-hour ride-time model
 (`GET /catalog/trails/{id}/optimal-time` via `useOptimalTime`), which also feeds the Discover hero
@@ -107,7 +113,8 @@ static. `src/data/trails.ts` now holds just the shared `Trail` type + helpers, n
   stays in the screens.
 - `src/state/ProfileContext.tsx` - the rider's localStorage-backed profile, favorite trails, and
   bird wishlist (keys `mtbirb.profile`/`mtbirb.favorites`/`mtbirb.wishlist`), exposed via
-  `useProfile()`. This is the only client-persisted state; everything else lives in the backend.
+  `useProfile()`. This is the only client-persisted state; everything else (including custom trail
+  photos) lives in the backend.
 - `src/data/trails.ts` - the shared `Trail` type, the catalog→Trail adapter, and the ported
   sort/format/score helpers (the static sample rows are gone). `src/data/use*.ts` are the backend
   hooks (trails, catalog detail, nearby species, species-ranked trails, trips, geolocation).

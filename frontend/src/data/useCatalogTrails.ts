@@ -49,6 +49,8 @@ export interface CatalogTrail {
   factors: SightingFactor[];
   // Set only when the list is fetched with a species filter: that species' odds near this trail.
   speciesLikelihood: number | null;
+  // A rider's custom hero photo, as a cache-busting version token (null = stock hero).
+  photoVersion: string | null;
 }
 
 /** Adapt a live catalog trail into the shared `Trail` shape the screens render. */
@@ -86,6 +88,7 @@ export function catalogToTrail(c: CatalogTrail): Trail {
     factors: c.factors ?? [],
     bestWindow: null,
     bestWindowWhy: null,
+    photoVersion: c.photoVersion ?? null,
   };
 }
 

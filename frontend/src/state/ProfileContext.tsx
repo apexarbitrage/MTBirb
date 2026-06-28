@@ -4,7 +4,8 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
  * The rider's per-device profile + their saved favorites and bird wishlist, persisted to
  * localStorage. With no accounts, each device is one user's data - the simplest multi-user model
  * that still ships; a future accounts layer could sync these to the backend. The logged-birds
- * catalogue (You tab) is NOT here - it's derived from the backend trips (useTrips).
+ * catalogue (You tab) is NOT here - it's derived from the backend trips (useTrips), and custom
+ * trail hero photos live in the backend (one global photo per trail), not here.
  */
 
 export interface Profile {
