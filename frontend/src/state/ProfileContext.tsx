@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
 /*
- * The rider's per-device profile + their saved favorites, bird wishlist, and custom trail photos,
- * persisted to localStorage. With no accounts, each device is one user's data - the simplest
- * multi-user model that still ships; a future accounts layer could sync these to the backend. The
- * logged-birds catalogue (You tab) is NOT here - it's derived from the backend trips (useTrips).
+ * The rider's per-device profile + their saved favorites and bird wishlist, persisted to
+ * localStorage. With no accounts, each device is one user's data - the simplest multi-user model
+ * that still ships; a future accounts layer could sync these to the backend. The logged-birds
+ * catalogue (You tab) is NOT here - it's derived from the backend trips (useTrips), and custom
+ * trail hero photos live in the backend (one global photo per trail), not here.
  */
 
 export interface Profile {
@@ -36,18 +37,11 @@ interface ProfileState {
   wishlist: WishlistBird[];
   isWishlisted: (code: string) => boolean;
   toggleWishlist: (bird: WishlistBird) => void;
-
-  // A rider's own photo for a trail (downscaled data-URL), keyed by catalog id, overriding the
-  // stock hero anywhere that trail's photo is shown.
-  trailPhoto: (id: string) => string | null;
-  setTrailPhoto: (id: string, dataUrl: string) => void;
-  removeTrailPhoto: (id: string) => void;
 }
 
 const KEY_PROFILE = "mtbirb.profile";
 const KEY_FAVORITES = "mtbirb.favorites";
 const KEY_WISHLIST = "mtbirb.wishlist";
-const KEY_TRAIL_PHOTOS = "mtbirb.trailPhotos";
 
 function load<T>(key: string, fallback: T): T {
   try {
@@ -72,9 +66,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(() => load<Profile | null>(KEY_PROFILE, null));
   const [favorites, setFavorites] = useState<FavoriteTrail[]>(() => load<FavoriteTrail[]>(KEY_FAVORITES, []));
   const [wishlist, setWishlist] = useState<WishlistBird[]>(() => load<WishlistBird[]>(KEY_WISHLIST, []));
-  const [trailPhotos, setTrailPhotos] = useState<Record<string, string>>(
-    () => load<Record<string, string>>(KEY_TRAIL_PHOTOS, {}),
-  );
 
   const saveProfile = useCallback((name: string, photo: string | null) => {
     const trimmed = name.trim();
@@ -103,24 +94,6 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const setTrailPhoto = useCallback((id: string, dataUrl: string) => {
-    setTrailPhotos((prev) => {
-      const next = { ...prev, [id]: dataUrl };
-      save(KEY_TRAIL_PHOTOS, next);
-      return next;
-    });
-  }, []);
-
-  const removeTrailPhoto = useCallback((id: string) => {
-    setTrailPhotos((prev) => {
-      if (!(id in prev)) return prev;
-      const next = { ...prev };
-      delete next[id];
-      save(KEY_TRAIL_PHOTOS, next);
-      return next;
-    });
-  }, []);
-
   const value = useMemo<ProfileState>(
     () => ({
       profile,
@@ -131,11 +104,8 @@ export function ProfileProvider({ children }: { children: ReactNode }) {
       wishlist,
       isWishlisted: (code) => wishlist.some((b) => b.code === code),
       toggleWishlist,
-      trailPhoto: (id) => trailPhotos[id] ?? null,
-      setTrailPhoto,
-      removeTrailPhoto,
     }),
-    [profile, saveProfile, favorites, toggleFavorite, wishlist, toggleWishlist, trailPhotos, setTrailPhoto, removeTrailPhoto],
+    [profile, saveProfile, favorites, toggleFavorite, wishlist, toggleWishlist],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

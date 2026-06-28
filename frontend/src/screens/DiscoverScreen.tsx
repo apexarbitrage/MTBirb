@@ -10,7 +10,7 @@ import { useTrails } from "../data/TrailsProvider";
 import { useTrailWeather, shortSky } from "../data/useTrailWeather";
 import { useOptimalTime } from "../data/useOptimalTime";
 import { useOptimalNow } from "../data/useOptimalNow";
-import { TRAIL_HERO_IMG, scoreColor, scoreChipBg } from "../data/trails";
+import { trailPhotoUrl, scoreColor, scoreChipBg } from "../data/trails";
 import { buildGreeting, formatEyebrowDate } from "../data/greeting";
 import { useAppState } from "../state/AppState";
 import { useProfile } from "../state/ProfileContext";
@@ -39,7 +39,7 @@ export function DiscoverScreen() {
   const selSlug = byId(discoverSelectedId)?.id ?? trails[0]?.id;
   const { current: wx } = useTrailWeather(selSlug);
   const { data: heroOptimal } = useOptimalTime(selSlug);
-  const { profile, trailPhoto } = useProfile();
+  const { profile } = useProfile();
   // Optimal-now ranking (only fetched while that sort is active).
   const { scores: optimalNow } = useOptimalNow(
     location.lat,
@@ -101,7 +101,7 @@ export function DiscoverScreen() {
         <div className={s.heroCard}>
           <div className={s.heroTop}>
             <Photo
-              src={trailPhoto(sel.id) ?? TRAIL_HERO_IMG}
+              src={trailPhotoUrl(sel.id, sel.photoVersion)}
               alt={sel.name}
               fit="cover"
               style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}

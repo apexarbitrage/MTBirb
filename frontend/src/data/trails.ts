@@ -61,6 +61,9 @@ export interface Trail {
   // optimal-time screen
   bestWindow: string | null;
   bestWindowWhy: string | null;
+  // A rider's custom hero photo, as a cache-busting version token (null = stock hero). See
+  // trailPhotoUrl + the backend trail_photos table.
+  photoVersion: string | null;
 }
 
 /** Map the catalog's free-text difficulty onto the design's three buckets (null if unrated). */
@@ -129,6 +132,14 @@ export type Likelihood = "High" | "Med" | "Rare";
 export const TRAIL_HERO_IMG = "/assets/raptor-ridge.jpg";
 export const AVATAR_IMG = "/assets/avatar.jpg";
 export const VIEWFINDER_IMG = "/assets/viewfinder.jpg";
+
+/**
+ * The hero image for a trail: the rider's uploaded photo (streamed from the backend, cache-busted
+ * by its version token) when one exists, else the stock hero. See the backend trail_photos table.
+ */
+export function trailPhotoUrl(id: string, photoVersion: string | null): string {
+  return photoVersion ? `/api/catalog/trails/${id}/photo?v=${photoVersion}` : TRAIL_HERO_IMG;
+}
 
 /* ---------- helpers (ported from renderVals) ---------- */
 

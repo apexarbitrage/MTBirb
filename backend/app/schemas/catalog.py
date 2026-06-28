@@ -85,6 +85,9 @@ class CatalogTrailOut(BaseModel):
     factors: list[SightingFactor] = Field(default_factory=list)
     # Set only when the list is filtered to one species: that species' odds near this trail.
     speciesLikelihood: int | None = None
+    # A rider's custom hero photo, as a cache-busting version token (null = use the stock hero).
+    # The image itself streams from GET /catalog/trails/{id}/photo?v={photoVersion}.
+    photoVersion: str | None = None
 
     @classmethod
     def from_model(
@@ -93,6 +96,7 @@ class CatalogTrailOut(BaseModel):
         score_info: dict | None = None,
         with_factors: bool = False,
         species_likelihood: int | None = None,
+        photo_version: str | None = None,
     ) -> "CatalogTrailOut":
         wildlife = _wildlife_fields(score_info, with_factors)
         return cls(
@@ -123,6 +127,7 @@ class CatalogTrailOut(BaseModel):
             surface=t.surface,
             mtbScale=t.mtb_scale,
             speciesLikelihood=species_likelihood,
+            photoVersion=photo_version,
             **wildlife,
         )
 

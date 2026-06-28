@@ -15,11 +15,8 @@ export interface GeoPhoto {
 
 const MAX_DIM = 320;
 
-/**
- * Downscale a chosen image to a JPEG data-URL whose longest side is at most `maxDim` px.
- * Defaults to a small avatar/trip thumbnail; pass a larger `maxDim` for a crisper hero photo.
- */
-export async function makeThumb(file: File, maxDim: number = MAX_DIM): Promise<string> {
+/** Load a chosen image file and draw it into a canvas scaled so its longest side is <= maxDim. */
+async function scaleToCanvas(file: File, maxDim: number): Promise<HTMLCanvasElement | null> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -35,12 +32,37 @@ export async function makeThumb(file: File, maxDim: number = MAX_DIM): Promise<s
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return "";
+    if (!ctx) return null;
     ctx.drawImage(img, 0, 0, w, h);
-    return canvas.toDataURL("image/jpeg", 0.6);
+    return canvas;
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/**
+ * Downscale a chosen image to a JPEG data-URL whose longest side is at most `maxDim` px.
+ * Defaults to a small avatar/trip thumbnail; pass a larger `maxDim` for a crisper hero photo.
+ */
+export async function makeThumb(file: File, maxDim: number = MAX_DIM): Promise<string> {
+  const canvas = await scaleToCanvas(file, maxDim);
+  return canvas ? canvas.toDataURL("image/jpeg", 0.6) : "";
+}
+
+/**
+ * Downscale a chosen image to a JPEG `Blob` (for upload) whose longest side is at most `maxDim` px.
+ * Used for the backend-stored trail hero photo, so it can be a bit larger/sharper than a thumbnail.
+ */
+export async function makeImageBlob(
+  file: File,
+  maxDim: number = MAX_DIM,
+  quality = 0.72,
+): Promise<Blob | null> {
+  const canvas = await scaleToCanvas(file, maxDim);
+  if (!canvas) return null;
+  return new Promise<Blob | null>((resolve) =>
+    canvas.toBlob((blob) => resolve(blob), "image/jpeg", quality),
+  );
 }
 
 export async function readGeoPhoto(file: File): Promise<GeoPhoto> {

@@ -11,15 +11,16 @@ import { useCatalogDetail } from "../data/useCatalogDetail";
 import { useTrips } from "../data/useTrips";
 import { shortSky } from "../data/useTrailWeather";
 import { useOptimalTime } from "../data/useOptimalTime";
-import { TRAIL_HERO_IMG, fmtTime, normalizeDifficulty } from "../data/trails";
+import { trailPhotoUrl, fmtTime, normalizeDifficulty } from "../data/trails";
 import { CameraIcon, HeartIcon } from "../components/icons";
-import { makeThumb } from "../data/photo";
+import { makeImageBlob } from "../data/photo";
+import { apiDelete, apiPostBlob } from "../api/client";
 import { useAppState } from "../state/AppState";
 import { useProfile } from "../state/ProfileContext";
 import s from "./TrailDetailScreen.module.css";
 
-// Hero photos persist as base64 in localStorage, so cap the longest side modestly.
-const HERO_MAX_DIM = 1024;
+// The hero is downscaled before upload; a touch larger than a thumbnail since the backend stores it.
+const HERO_MAX_DIM = 1600;
 
 function elevationPaths(elev: number[]) {
   const W = 300;
@@ -53,9 +54,12 @@ export function TrailDetailScreen() {
     useCatalogDetail(detailTrailId);
   const { trips } = useTrips();
   const { data: optimal } = useOptimalTime(detailTrailId);
-  const { isFavorite, toggleFavorite, trailPhoto, setTrailPhoto, removeTrailPhoto } = useProfile();
+  const { isFavorite, toggleFavorite } = useProfile();
   const [showLog, setShowLog] = useState(false);
   const [savingPhoto, setSavingPhoto] = useState(false);
+  // Local override so an upload/remove reflects immediately; id-scoped since this screen doesn't
+  // remount when the viewed trail changes. `version: null` means "removed", a string means uploaded.
+  const [localPhoto, setLocalPhoto] = useState<{ id: string; version: string | null } | null>(null);
 
   if (loading || error || !trail) {
     return (
@@ -86,18 +90,39 @@ export function TrailDetailScreen() {
     .flatMap((t) => t.photos)
     .filter((p): p is typeof p & { lat: number; lon: number } => p.lat != null && p.lon != null);
 
-  // A rider's own hero photo for this trail, overriding the stock image.
-  const customPhoto = trailPhoto(trail.id);
-  const heroSrc = customPhoto ?? TRAIL_HERO_IMG;
+  // A rider's own hero photo for this trail (server-backed), with a local override so an upload or
+  // remove shows instantly without refetching the whole detail (which would re-run line/metrics).
+  const localV = localPhoto && localPhoto.id === trail.id ? localPhoto.version : undefined;
+  const effectiveVersion = localV !== undefined ? localV : trail.photoVersion;
+  const heroSrc = trailPhotoUrl(trail.id, effectiveVersion);
+  const hasCustomPhoto = effectiveVersion != null;
+
   const pickHeroPhoto = async (files: FileList | null) => {
     const file = files?.[0];
     if (!file) return;
     setSavingPhoto(true);
     try {
-      setTrailPhoto(trail.id, await makeThumb(file, HERO_MAX_DIM));
+      const blob = await makeImageBlob(file, HERO_MAX_DIM);
+      if (!blob) return;
+      const resp = await apiPostBlob<{ photoVersion: string }>(
+        `/catalog/trails/${trail.id}/photo`,
+        blob,
+        "image/jpeg",
+      );
+      setLocalPhoto({ id: trail.id, version: resp.photoVersion });
+    } catch {
+      // Leave the current image in place if the upload fails.
     } finally {
       setSavingPhoto(false);
     }
+  };
+  const removeHeroPhoto = async () => {
+    try {
+      await apiDelete(`/catalog/trails/${trail.id}/photo`);
+    } catch {
+      // Ignore; fall through to the optimistic local revert.
+    }
+    setLocalPhoto({ id: trail.id, version: null });
   };
 
   return (
@@ -121,18 +146,14 @@ export function TrailDetailScreen() {
             />
             <div className={s.heroHint}>
               <CameraIcon color="#fff" size={15} />
-              {savingPhoto ? "Saving…" : customPhoto ? "Change photo" : "Add your photo"}
+              {savingPhoto ? "Saving…" : hasCustomPhoto ? "Change photo" : "Add your photo"}
             </div>
           </label>
           <div className={s.heroBtnTop} style={{ left: 16 }}>
             <BackButton />
           </div>
-          {customPhoto && (
-            <button
-              className={s.heroRemove}
-              onClick={() => removeTrailPhoto(trail.id)}
-              aria-label="Remove your photo"
-            >
+          {hasCustomPhoto && (
+            <button className={s.heroRemove} onClick={removeHeroPhoto} aria-label="Remove your photo">
               Remove
             </button>
           )}
