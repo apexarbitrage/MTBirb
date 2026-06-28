@@ -8,6 +8,7 @@ export default defineConfig({
     // Serve the dev server over HTTPS (self-signed cert via basic-ssl below) and bind to all
     // interfaces, so opening it from a phone on the LAN is a secure context. The mic
     // (navigator.mediaDevices) and precise geolocation only exist over https:// or on localhost.
+    allowedHosts: ['.devtunnels.ms'], //allow devtunnels.ms to proxy to this server (for LAN access from a phone)
     host: true,
     proxy: {
       "/api": {
