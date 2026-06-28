@@ -15,7 +15,11 @@ export interface GeoPhoto {
 
 const MAX_DIM = 320;
 
-export async function makeThumb(file: File): Promise<string> {
+/**
+ * Downscale a chosen image to a JPEG data-URL whose longest side is at most `maxDim` px.
+ * Defaults to a small avatar/trip thumbnail; pass a larger `maxDim` for a crisper hero photo.
+ */
+export async function makeThumb(file: File, maxDim: number = MAX_DIM): Promise<string> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -24,7 +28,7 @@ export async function makeThumb(file: File): Promise<string> {
       el.onerror = reject;
       el.src = url;
     });
-    const scale = Math.min(1, MAX_DIM / Math.max(img.width, img.height));
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
     const w = Math.max(1, Math.round(img.width * scale));
     const h = Math.max(1, Math.round(img.height * scale));
     const canvas = document.createElement("canvas");

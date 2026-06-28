@@ -39,7 +39,7 @@ export function DiscoverScreen() {
   const selSlug = byId(discoverSelectedId)?.id ?? trails[0]?.id;
   const { current: wx } = useTrailWeather(selSlug);
   const { data: heroOptimal } = useOptimalTime(selSlug);
-  const { profile } = useProfile();
+  const { profile, trailPhoto } = useProfile();
   // Optimal-now ranking (only fetched while that sort is active).
   const { scores: optimalNow } = useOptimalNow(
     location.lat,
@@ -101,7 +101,7 @@ export function DiscoverScreen() {
         <div className={s.heroCard}>
           <div className={s.heroTop}>
             <Photo
-              src={TRAIL_HERO_IMG}
+              src={trailPhoto(sel.id) ?? TRAIL_HERO_IMG}
               alt={sel.name}
               fit="cover"
               style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}

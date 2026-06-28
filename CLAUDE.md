@@ -86,10 +86,13 @@ now runs on the **live backend**, not the design's static sample data:
   (the ♥ beside "Log this ride" on Trail detail), a **bird wishlist** (the ♥ beside "Best trails
   for…" on Birbs - tapping a saved bird re-runs the species ranking via `speciesFilter`), and a
   **logged-birds** catalogue derived from `trips[].birds`. Live stats (rides/miles/birds/life list)
-  come from `useTrips`. The profile + favorites + wishlist persist to **localStorage** via
-  `ProfileContext` (no accounts → per-device = one user; a future accounts layer could sync it); the
-  profile sheet (`ProfileSheet`) doubles as the first-load onboarding gate (`App.tsx` renders it when
-  `profile === null`). Logged birds and stats are backend-derived, so they need no extra storage.
+  come from `useTrips`. The profile + favorites + wishlist + **custom trail photos** persist to
+  **localStorage** via `ProfileContext` (no accounts → per-device = one user; a future accounts layer
+  could sync it); the profile sheet (`ProfileSheet`) doubles as the first-load onboarding gate
+  (`App.tsx` renders it when `profile === null`). Logged birds and stats are backend-derived, so they
+  need no extra storage. A rider can also set their **own hero photo** for a trail by tapping the
+  image on Trail detail (downscaled to a data-URL, keyed by trail id); it then overrides the stock
+  hero there and on the Discover hero.
 Bird ID records a mic clip and runs it through BirdNET (`POST /birdnet/identify`). Optimal time
 is live too: its dual curve, best window, and hourly strip come from the per-hour ride-time model
 (`GET /catalog/trails/{id}/optimal-time` via `useOptimalTime`), which also feeds the Discover hero
@@ -105,9 +108,10 @@ static. `src/data/trails.ts` now holds just the shared `Trail` type + helpers, n
 - `src/state/AppState.tsx` - React Context holding cross-screen state (Discover hero/sort, Trails
   sort/dir, the Targeting→Trails species filter, the Trail-detail subject). Screen-local UI state
   stays in the screens.
-- `src/state/ProfileContext.tsx` - the rider's localStorage-backed profile, favorite trails, and
-  bird wishlist (keys `mtbirb.profile`/`mtbirb.favorites`/`mtbirb.wishlist`), exposed via
-  `useProfile()`. This is the only client-persisted state; everything else lives in the backend.
+- `src/state/ProfileContext.tsx` - the rider's localStorage-backed profile, favorite trails,
+  bird wishlist, and custom trail hero photos (keys `mtbirb.profile`/`mtbirb.favorites`/
+  `mtbirb.wishlist`/`mtbirb.trailPhotos`), exposed via `useProfile()`. This is the only
+  client-persisted state; everything else lives in the backend.
 - `src/data/trails.ts` - the shared `Trail` type, the catalog→Trail adapter, and the ported
   sort/format/score helpers (the static sample rows are gone). `src/data/use*.ts` are the backend
   hooks (trails, catalog detail, nearby species, species-ranked trails, trips, geolocation).

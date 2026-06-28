@@ -12,10 +12,14 @@ import { useTrips } from "../data/useTrips";
 import { shortSky } from "../data/useTrailWeather";
 import { useOptimalTime } from "../data/useOptimalTime";
 import { TRAIL_HERO_IMG, fmtTime, normalizeDifficulty } from "../data/trails";
-import { HeartIcon } from "../components/icons";
+import { CameraIcon, HeartIcon } from "../components/icons";
+import { makeThumb } from "../data/photo";
 import { useAppState } from "../state/AppState";
 import { useProfile } from "../state/ProfileContext";
 import s from "./TrailDetailScreen.module.css";
+
+// Hero photos persist as base64 in localStorage, so cap the longest side modestly.
+const HERO_MAX_DIM = 1024;
 
 function elevationPaths(elev: number[]) {
   const W = 300;
@@ -49,8 +53,9 @@ export function TrailDetailScreen() {
     useCatalogDetail(detailTrailId);
   const { trips } = useTrips();
   const { data: optimal } = useOptimalTime(detailTrailId);
-  const { isFavorite, toggleFavorite } = useProfile();
+  const { isFavorite, toggleFavorite, trailPhoto, setTrailPhoto, removeTrailPhoto } = useProfile();
   const [showLog, setShowLog] = useState(false);
+  const [savingPhoto, setSavingPhoto] = useState(false);
 
   if (loading || error || !trail) {
     return (
@@ -81,21 +86,56 @@ export function TrailDetailScreen() {
     .flatMap((t) => t.photos)
     .filter((p): p is typeof p & { lat: number; lon: number } => p.lat != null && p.lon != null);
 
+  // A rider's own hero photo for this trail, overriding the stock image.
+  const customPhoto = trailPhoto(trail.id);
+  const heroSrc = customPhoto ?? TRAIL_HERO_IMG;
+  const pickHeroPhoto = async (files: FileList | null) => {
+    const file = files?.[0];
+    if (!file) return;
+    setSavingPhoto(true);
+    try {
+      setTrailPhoto(trail.id, await makeThumb(file, HERO_MAX_DIM));
+    } finally {
+      setSavingPhoto(false);
+    }
+  };
+
   return (
     <div className={s.screen}>
       <div className={s.scroll}>
-        {/* Hero */}
+        {/* Hero — tap to set your own photo for this trail */}
         <div className={s.hero}>
-          <Photo
-            src={TRAIL_HERO_IMG}
-            alt={trail.name}
-            fit="cover"
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
-            label="Trail hero photo"
-          />
+          <label className={s.heroPicker}>
+            <Photo
+              src={heroSrc}
+              alt={trail.name}
+              fit="cover"
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+              label="Trail hero photo"
+            />
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => pickHeroPhoto(e.target.files)}
+              style={{ display: "none" }}
+            />
+            <div className={s.heroHint}>
+              <CameraIcon color="#fff" size={15} />
+              {savingPhoto ? "Saving…" : customPhoto ? "Change photo" : "Add your photo"}
+            </div>
+          </label>
           <div className={s.heroBtnTop} style={{ left: 16 }}>
             <BackButton />
           </div>
+          {customPhoto && (
+            <button
+              className={s.heroRemove}
+              onClick={() => removeTrailPhoto(trail.id)}
+              aria-label="Remove your photo"
+            >
+              Remove
+            </button>
+          )}
           {diff && (
             <div className={s.diffPill}>
               <div style={{ width: 10, height: 10, background: "var(--forest-1a)", transform: "rotate(45deg)", border: "1px solid #fff" }} />
