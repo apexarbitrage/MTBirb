@@ -17,6 +17,42 @@
   position: relative;
 }
 
+.heroPicker {
+  position: absolute;
+  inset: 0;
+  display: block;
+  cursor: pointer;
+}
+
+.heroHint {
+  position: absolute;
+  bottom: 12px;
+  left: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(45, 59, 45, 0.78);
+  border-radius: var(--radius-pill);
+  padding: 6px 11px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.heroRemove {
+  position: absolute;
+  top: 54px;
+  right: 16px;
+  border: none;
+  background: rgba(45, 59, 45, 0.78);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+}
+
 .heroBtnTop {
   position: absolute;
   top: 54px;

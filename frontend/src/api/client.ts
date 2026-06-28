@@ -30,7 +30,7 @@ export async function apiPost<T>(path: string, body: unknown, signal?: AbortSign
   return (await res.json()) as T;
 }
 
-/** POST raw binary (e.g. a WAV clip) and parse a JSON response. */
+/** POST raw binary (e.g. a WAV clip or an image) and parse a JSON response. */
 export async function apiPostBlob<T>(path: string, blob: Blob, contentType: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
@@ -41,4 +41,12 @@ export async function apiPostBlob<T>(path: string, blob: Blob, contentType: stri
     throw new Error(`POST ${path} failed (${res.status})`);
   }
   return (await res.json()) as T;
+}
+
+/** DELETE a resource; resolves on any 2xx (including 204 No Content). */
+export async function apiDelete(path: string): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, { method: "DELETE" });
+  if (!res.ok) {
+    throw new Error(`DELETE ${path} failed (${res.status})`);
+  }
 }

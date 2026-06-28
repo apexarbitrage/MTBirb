@@ -7,7 +7,7 @@ as areas are browsed (within the request quota).
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -37,6 +37,13 @@ from app.services.trail_catalog import (
     sightings_near_count,
 )
 from app.services.trail_metrics import bulk_compute_metrics, ensure_metrics
+from app.services.trail_photos import (
+    delete_photo,
+    get_photo,
+    photo_version,
+    upsert_photo,
+    versions_for,
+)
 from app.services.wildlife_likelihood import (
     score_catalog_trails,
     score_species_for_trails,
@@ -56,6 +63,8 @@ _MIN_CACHED = 8
 _MIN_SIGHTINGS = 20
 # Catalog trails are points, so wildlife is reported as an area-level signal at this radius.
 _AREA_BUFFER_M = 8000
+# Upper bound on an uploaded trail hero photo (the client downscales first; this is a guard).
+_MAX_PHOTO_BYTES = 8 * 1024 * 1024
 
 
 def _get_catalog_or_404(db: Session, external_id: str) -> CatalogTrail:
@@ -94,9 +103,13 @@ async def list_catalog_trails(
     scores = score_catalog_trails(db, ids, buffer_m=_AREA_BUFFER_M)
     # When targeting one species, also score each trail by that species' odds and rank by it.
     sp = score_species_for_trails(db, ids, species) if species else {}
+    versions = versions_for(db, [t.external_id for t in trails])
     out = [
         CatalogTrailOut.from_model(
-            t, scores.get(t.id), species_likelihood=sp.get(t.id, {}).get("likelihood") if species else None
+            t,
+            scores.get(t.id),
+            species_likelihood=sp.get(t.id, {}).get("likelihood") if species else None,
+            photo_version=versions.get(t.external_id),
         )
         for t in trails
     ]
@@ -148,10 +161,54 @@ async def get_catalog_trail(external_id: str, db: Session = Depends(get_db)) -> 
     except Exception:  # noqa: BLE001 - keep any existing (Open-Meteo) metrics on DEM failure
         pass
     score = score_catalog_trails(db, [trail.id], buffer_m=_AREA_BUFFER_M).get(trail.id)
+    photo = get_photo(db, external_id)
     return {
-        "trail": CatalogTrailOut.from_model(trail, score, with_factors=True),
+        "trail": CatalogTrailOut.from_model(
+            trail, score, with_factors=True, photo_version=photo_version(photo.updated_at if photo else None)
+        ),
         "linePoints": line_points(db, trail.id),
     }
+
+
+@router.post("/trails/{external_id}/photo")
+async def upload_trail_photo(external_id: str, request: Request, db: Session = Depends(get_db)) -> dict:
+    """Set the rider's hero photo for this trail (raw image body, like the BirdNET clip upload).
+
+    One global photo per trail for now (no accounts) - the latest upload replaces the previous.
+    Returns the new `photoVersion` so the client can swap the hero in without a full refetch."""
+    trail = _get_catalog_or_404(db, external_id)
+    data = await request.body()
+    if not data:
+        raise HTTPException(status_code=400, detail="no image uploaded")
+    if len(data) > _MAX_PHOTO_BYTES:
+        raise HTTPException(status_code=413, detail="image too large")
+    content_type = request.headers.get("content-type", "image/jpeg")
+    if not content_type.startswith("image/"):
+        raise HTTPException(status_code=415, detail="expected an image upload")
+    photo = upsert_photo(db, trail.external_id, data, content_type)
+    return {"trail": external_id, "photoVersion": photo_version(photo.updated_at)}
+
+
+@router.get("/trails/{external_id}/photo")
+def get_trail_photo(external_id: str, db: Session = Depends(get_db)) -> Response:
+    """Stream the rider's hero photo for this trail (404 when there isn't one).
+
+    Long-cacheable: callers fetch with `?v={photoVersion}`, which changes whenever the photo does."""
+    photo = get_photo(db, external_id)
+    if photo is None:
+        raise HTTPException(status_code=404, detail="no custom photo for this trail")
+    return Response(
+        content=photo.image,
+        media_type=photo.content_type,
+        headers={"Cache-Control": "public, max-age=31536000, immutable"},
+    )
+
+
+@router.delete("/trails/{external_id}/photo", status_code=204)
+def delete_trail_photo(external_id: str, db: Session = Depends(get_db)) -> Response:
+    """Remove the rider's hero photo, reverting to the stock image."""
+    delete_photo(db, external_id)
+    return Response(status_code=204)
 
 
 @router.get("/trails/{external_id}/wildlife")
