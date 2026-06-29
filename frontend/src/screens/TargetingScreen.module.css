@@ -42,23 +42,6 @@
   font-weight: 700;
 }
 
-.search {
-  margin-top: 14px;
-  height: 44px;
-  border-radius: var(--radius-tile);
-  background: var(--white);
-  box-shadow: var(--shadow-card-sm);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 14px;
-}
-
-.searchPlaceholder {
-  color: var(--text-placeholder);
-  font-size: 15px;
-}
-
 .cards {
   display: flex;
   flex-direction: column;

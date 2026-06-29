@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BottomNav } from "../components/BottomNav";
 import { CenterMessage } from "../components/CenterMessage";
 import { DifficultyMarker } from "../components/DifficultyMarker";
+import { SearchField } from "../components/SearchField";
 import { BirdGlyph } from "../components/icons";
 import { useTrails } from "../data/TrailsProvider";
 import { useSpeciesTrails } from "../data/useSpeciesTrails";
@@ -26,6 +28,7 @@ export function TrailsScreen() {
     useAppState();
   const speciesView = useSpeciesTrails(speciesFilter?.code ?? null, location.lat, location.lon);
   const { scores: optimalNow } = useOptimalNow(location.lat, location.lon, trailSort === "optimal");
+  const [query, setQuery] = useState("");
 
   const open = (id: string) => {
     setDetailTrailId(id);
@@ -117,7 +120,7 @@ export function TrailsScreen() {
     );
   }
 
-  // --- Default view: all trails, sortable ---
+  // --- Default view: all trails, sortable + searchable ---
   const sorted = [...trails].sort((a, b) => {
     const c =
       trailSort === "optimal"
@@ -125,16 +128,27 @@ export function TrailsScreen() {
         : compareTrails(a, b, trailSort);
     return trailDir === "asc" ? c : -c;
   });
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? sorted.filter(
+        (t) => t.name.toLowerCase().includes(q) || (t.location ?? "").toLowerCase().includes(q),
+      )
+    : sorted;
   const arrow = trailDir === "asc" ? "↑" : "↓";
 
   return (
     <div className={common.screen}>
       <div className={s.header}>
         <div className={common.eyebrow}>
-          {location.label} · {sorted.length} trail{sorted.length === 1 ? "" : "s"}
+          {location.label} · {visible.length} trail{visible.length === 1 ? "" : "s"}
+          {q ? ` matching “${query.trim()}”` : ""}
         </div>
         <div className={s.titleRow}>
           <div className={common.title}>All trails</div>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <SearchField value={query} onChange={setQuery} placeholder="Search trails by name or place" />
         </div>
 
         <div className={s.sortedBy}>
@@ -161,7 +175,13 @@ export function TrailsScreen() {
       </div>
 
       <div className={s.list}>
-        {sorted.map((t) => (
+        {visible.length === 0 ? (
+          <CenterMessage
+            title="No trails match your search"
+            detail={`Nothing near ${location.label} matches “${query.trim()}”.`}
+          />
+        ) : (
+          visible.map((t) => (
           <button key={t.id} className={s.trailCard} onClick={() => open(t.id)}>
             <div className={s.cardTop}>
               {t.diff && <DifficultyMarker diff={t.diff} size={11} />}
@@ -194,7 +214,8 @@ export function TrailsScreen() {
               </div>
             </div>
           </button>
-        ))}
+          ))
+        )}
       </div>
 
       <BottomNav active="trails" />

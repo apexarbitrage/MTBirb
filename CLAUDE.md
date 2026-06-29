@@ -107,7 +107,8 @@ static. `src/data/trails.ts` now holds just the shared `Trail` type + helpers, n
   (React Router). Flow screens have no bottom nav and use `BackButton`.
 - `src/components/` - shared UI: `BottomNav`, `DifficultyMarker`, `ScoreRing`, `Photo`
   (the design's `image-slot` → a real `<img>` with a palette fallback), `icons.tsx` (all custom
-  inline-SVG icons), `BirdIdFab`, `BackButton`.
+  inline-SVG icons), `BirdIdFab`, `BackButton`, `SearchField` (the rounded search box atop the
+  Trails + Birbs tabs; each screen owns the filter, the field is presentation only).
 - `src/state/AppState.tsx` - React Context holding cross-screen state (Discover hero/sort, Trails
   sort/dir, the Targeting→Trails species filter, the Trail-detail subject). Screen-local UI state
   stays in the screens.
