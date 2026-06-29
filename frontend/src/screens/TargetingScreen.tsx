@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { BottomNav } from "../components/BottomNav";
 import { BirdGlyph, HeartIcon } from "../components/icons";
 import { CenterMessage } from "../components/CenterMessage";
+import { SearchField } from "../components/SearchField";
 import { useTrails } from "../data/TrailsProvider";
 import { useNearbySpecies, type NearbySpeciesItem } from "../data/useNearbySpecies";
 import { likelihoodColor } from "../data/trails";
@@ -21,12 +22,19 @@ export function TargetingScreen() {
   const [segment, setSegment] = useState(0);
   // Selection is tagged with its segment so switching modes falls back to that mode's top pick.
   const [selected, setSelected] = useState<{ seg: number; item: NearbySpeciesItem } | null>(null);
+  const [query, setQuery] = useState("");
 
   const usesPicker = segment !== 1; // "Most wildlife" ranks every trail, no species needed
   const { species } = useNearbySpecies(location.lat, location.lon, segment === 2);
 
+  // Filter the nearby-species picker by name (client-side over what's reported near you).
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? (species ?? []).filter((sp) => sp.common_name.toLowerCase().includes(q))
+    : (species ?? []);
+
   const active =
-    selected?.seg === segment ? selected.item : usesPicker ? species?.[0] ?? null : null;
+    selected?.seg === segment ? selected.item : usesPicker ? filtered[0] ?? null : null;
 
   const apply = () => {
     setSpeciesFilter(usesPicker && active ? { code: active.species_code, name: active.common_name } : null);
@@ -68,16 +76,23 @@ export function TargetingScreen() {
           </div>
         ) : (
           <>
+            <div style={{ marginTop: 16 }}>
+              <SearchField value={query} onChange={setQuery} placeholder="Search species by name" />
+            </div>
             <div className={common.sectionLabel} style={{ marginTop: 20 }}>
               {segment === 2 ? "NOTABLE NEAR YOU" : "LIKELY NEAR YOU"} · {location.label}
             </div>
             {species === null ? (
               <CenterMessage title="Loading species…" />
-            ) : species.length === 0 ? (
-              <CenterMessage title="No species reported nearby" detail="Try the other modes." />
+            ) : filtered.length === 0 ? (
+              q ? (
+                <CenterMessage title={`No species match “${query.trim()}”`} detail="Try a different name or mode." />
+              ) : (
+                <CenterMessage title="No species reported nearby" detail="Try the other modes." />
+              )
             ) : (
               <div className={s.cards}>
-                {species.map((sp) => {
+                {filtered.map((sp) => {
                   const isSel = (active?.species_code ?? "") === sp.species_code;
                   return (
                     <button
