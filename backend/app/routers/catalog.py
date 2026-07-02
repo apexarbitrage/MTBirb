@@ -35,6 +35,7 @@ from app.services.trail_catalog import (
     line_points,
     nearby_trails,
     recent_species_near_catalog,
+    search_catalog_trails,
     sightings_near_count,
 )
 from app.services.trail_metrics import bulk_compute_metrics, ensure_metrics
@@ -160,6 +161,35 @@ async def search_species(
     if not has_taxonomy(db) and get_settings().ebird_api_key:
         await sync_taxonomy(db)
     return {"query": q, "species": search_taxonomy(db, q, limit=limit)}
+
+
+@router.get("/trails-search")
+async def search_trails(
+    q: str = Query(..., min_length=1, max_length=80),
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    limit: int = Query(20, ge=1, le=50),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Search the cached trail catalog by name, ordered nearest-first.
+
+    Returns trails from anywhere in the cache — not just those within the current location's
+    radius. Only trails already cached are searchable; new regions populate as they're browsed."""
+    results = search_catalog_trails(db, q, lat, lon, limit)
+    if not results:
+        return {"query": q, "count": 0, "trails": []}
+    trails_only = [t for t, _ in results]
+    scores = score_catalog_trails(db, [t.id for t in trails_only], buffer_m=_AREA_BUFFER_M)
+    versions = versions_for(db, [t.external_id for t in trails_only])
+    out = []
+    for trail, dist_mi in results:
+        item = CatalogTrailOut.from_model(
+            trail,
+            scores.get(trail.id),
+            photo_version=versions.get(trail.external_id),
+        )
+        out.append({**item.model_dump(), "distanceMi": round(dist_mi, 1)})
+    return {"query": q, "count": len(out), "trails": out}
 
 
 @router.get("/trails/{external_id}")

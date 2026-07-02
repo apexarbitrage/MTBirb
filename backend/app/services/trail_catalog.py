@@ -158,6 +158,28 @@ def recent_species_near_catalog(
     ]
 
 
+def search_catalog_trails(
+    db: Session, query: str, lat: float, lon: float, limit: int = 20
+) -> list[tuple[CatalogTrail, float]]:
+    """Name search across all cached trails, nearest first. Returns (trail, distance_mi) pairs.
+    Only matches trails already in the cache; new regions populate as they're browsed."""
+    q = query.strip()
+    if len(q) < 2:
+        return []
+    point = _point_geog(lat, lon)
+    geog = func.cast(CatalogTrail.geom, Geography)
+    rows = db.execute(
+        select(
+            CatalogTrail,
+            (func.ST_Distance(geog, point) / 1609.344).label("distance_mi"),
+        )
+        .where(CatalogTrail.name.ilike(f"%{q}%"))
+        .order_by(func.ST_Distance(geog, point))
+        .limit(limit)
+    ).all()
+    return [(row.CatalogTrail, float(row.distance_mi)) for row in rows]
+
+
 def line_points(db: Session, catalog_id: int) -> list[list[float]] | None:
     """The catalog trail's OSM line as [[lon, lat], ...], or None if it has no line yet."""
     geojson = db.scalar(
