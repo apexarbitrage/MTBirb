@@ -14,7 +14,15 @@ import httpx
 from app.config import get_settings
 
 TOMTOM_ROUTING_URL = "https://api.tomtom.com/routing/1/calculateRoute"
-TOMTOM_TILE_URL = "https://api.tomtom.com/map/1/tile/basic/main"
+TOMTOM_TILE_BASE = "https://api.tomtom.com/map/1/tile"
+# Selectable raster layers -> (TomTom layer path, file extension, media type). `basic` is the full
+# road map (nav screen); `sat` is satellite imagery + `hybrid` its transparent road/label overlay,
+# stacked for the terrain map on Trail detail.
+TILE_LAYERS: dict[str, tuple[str, str, str]] = {
+    "basic": ("basic", "png", "image/png"),
+    "sat": ("sat", "jpg", "image/jpeg"),
+    "hybrid": ("hybrid", "png", "image/png"),
+}
 
 
 class TomTomNotConfigured(RuntimeError):
@@ -67,12 +75,17 @@ class TomTomClient:
             "points": points,
         }
 
-    async def fetch_tile(self, z: int, x: int, y: int) -> bytes:
-        """A single raster map tile (PNG) from TomTom, fetched server-side so the key stays in
-        `.env` and never reaches the browser (the frontend's Leaflet layer hits our proxy)."""
+    async def fetch_tile(self, z: int, x: int, y: int, layer: str = "basic") -> tuple[bytes, str]:
+        """A single raster map tile from TomTom, fetched server-side so the key stays in `.env`
+        and never reaches the browser (the frontend's Leaflet layer hits our proxy).
+
+        `layer` picks the style (`basic`/`sat`/`hybrid`); returns (tile bytes, media type).
+        """
         if not self._key:
             raise TomTomNotConfigured("TOMTOM_API_KEY not set")
+        path, ext, media_type = TILE_LAYERS.get(layer, TILE_LAYERS["basic"])
+        url = f"{TOMTOM_TILE_BASE}/{path}/main/{z}/{x}/{y}.{ext}"
         async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(f"{TOMTOM_TILE_URL}/{z}/{x}/{y}.png", params={"key": self._key})
+            resp = await client.get(url, params={"key": self._key})
             resp.raise_for_status()
-            return resp.content
+            return resp.content, media_type

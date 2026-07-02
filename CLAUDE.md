@@ -274,6 +274,10 @@ column will create a redundant duplicate index, not a missing one.
   real **TomTom map tiles**, proxied through the backend (`routers/map.py` → `TomTomClient.fetch_tile`,
   Leaflet's tile layer hits `/api/map/tile/{z}/{x}/{y}`) so the key never reaches the browser; the
   Fun-drive/Fastest toggle swaps the drawn route, and real turn-by-turn is delegated to the maps app.
+  The tile proxy takes a `?layer=` (`basic` road map for nav, `sat`/`hybrid` for terrain); the
+  Trail-detail **TRAIL MAP** card (`components/TrailMap.tsx`) stacks `sat`+`hybrid` under the trail's
+  OSM line + any geotagged photo pins as a *static* (non-interactive) Leaflet preview - it falls soft
+  to a plain backdrop with the line drawn on top when `TOMTOM_API_KEY` is unset (tiles 503).
 
 ### Sensitive-species handling
 
