@@ -30,6 +30,14 @@ _NOISE_FLOOR_M = 1.0
 _MIN_METRIC_LENGTH_M = 500.0
 # Sentinel `elev_source` for a line too short to derive trustworthy metrics from.
 _TOO_SHORT = "too-short"
+# Base effort offset per difficulty tier. Keeps Advanced trails from scoring the same formula
+# as Beginner ones when elevation gain happens to be similar.
+_DIFFICULTY_BASE: dict[str, float] = {
+    "beginner": 0.0, "easy": 0.0,
+    "intermediate": 1.5, "moderate": 1.5,
+    "advanced": 3.5, "difficult": 3.5,
+    "expert": 5.0, "pro": 5.0,
+}
 _METRIC_FIELDS = (
     "metric_length_mi", "ascent_ft", "descent_ft", "avg_up_grade",
     "avg_down_grade", "elevation_profile", "ride_time_min", "effort",
@@ -80,7 +88,7 @@ def resample(points: list[list[float]], n: int) -> tuple[list[tuple[float, float
     return samples, total
 
 
-def compute(elevations_m: list[float], total_m: float) -> dict:
+def compute(elevations_m: list[float], total_m: float, difficulty: str | None = None) -> dict:
     """Reduce evenly-spaced elevations + total length into the trail's terrain metrics."""
     n = len(elevations_m)
     seg_m = total_m / (n - 1) if n > 1 else 0.0
@@ -116,10 +124,11 @@ def compute(elevations_m: list[float], total_m: float) -> dict:
     avg_down = (descent_m / down_run_m * 100) if down_run_m else 0.0
 
     # Heuristic estimates (not from the DEM): a flat-ground pace of ~10 mph plus a climbing
-    # penalty, and an effort index that grows with distance and total climb. Labelled as
-    # estimates in the UI - they stand in until a calibrated effort model lands.
+    # penalty, and an effort index that blends distance, climb, and difficulty rating so that
+    # Advanced trails don't score the same as Beginner ones with the same elevation gain.
     ride_min = round(miles * 6.0 + ascent_ft * 0.012)
-    effort = round(min(10.0, max(1.0, miles * 0.5 + ascent_ft / 500.0)), 1)
+    diff_base = _DIFFICULTY_BASE.get((difficulty or "").strip().lower(), 0.0)
+    effort = round(min(10.0, max(1.0, diff_base + miles * 0.3 + ascent_ft / 300.0)), 1)
 
     return {
         "metric_length_mi": round(miles, 2),
@@ -160,7 +169,7 @@ async def ensure_metrics(db: Session, trail: CatalogTrail, client, *, force: boo
         db.commit()
         return False
     elevations = await client.lookup(samples)
-    metrics = compute(elevations, total_m)
+    metrics = compute(elevations, total_m, difficulty=trail.difficulty)
 
     trail.metric_length_mi = metrics["metric_length_mi"]
     trail.ascent_ft = metrics["ascent_ft"]

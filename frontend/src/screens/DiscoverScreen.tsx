@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { BottomNav } from "../components/BottomNav";
 import { BirdIdFab } from "../components/BirdIdFab";
@@ -26,6 +27,7 @@ const SORT_LABELS: Record<string, string> = {
 
 export function DiscoverScreen() {
   const navigate = useNavigate();
+  const scrollRef = useRef<HTMLDivElement>(null);
   const { trails, byId, location, loading, error, reload } = useTrails();
   const {
     discoverSelectedId,
@@ -82,7 +84,7 @@ export function DiscoverScreen() {
 
   return (
     <div className={common.screen}>
-      <div className={common.scrollArea}>
+      <div className={common.scrollArea} ref={scrollRef}>
         <div className={common.eyebrow} style={{ letterSpacing: 1.5 }}>
           {formatEyebrowDate(now)}
         </div>
@@ -205,7 +207,14 @@ export function DiscoverScreen() {
 
         <div className={s.rankedList}>
           {rest.map((t, i) => (
-            <button key={t.id} className={s.rankedRow} onClick={() => setDiscoverSelectedId(t.id)}>
+            <button
+              key={t.id}
+              className={s.rankedRow}
+              onClick={() => {
+                setDiscoverSelectedId(t.id);
+                scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
               <div className={s.rankBox} style={{ color: scoreColor(t.score) }}>
                 {i + 2}
               </div>

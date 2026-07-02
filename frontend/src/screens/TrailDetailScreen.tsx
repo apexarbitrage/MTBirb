@@ -49,7 +49,7 @@ const surfaceChip: CSSProperties = {
 
 export function TrailDetailScreen() {
   const navigate = useNavigate();
-  const { detailTrailId, setDetailTrailId } = useAppState();
+  const { detailTrailId, setDetailTrailId, setSpeciesFilter } = useAppState();
   const { trail, linePoints, error, loading, species, areaRadiusKm, weather } =
     useCatalogDetail(detailTrailId);
   const { trips } = useTrips();
@@ -345,6 +345,17 @@ export function TrailDetailScreen() {
             </div>
           )}
 
+          {/* Trail line map */}
+          {linePoints && linePoints.length > 1 && (
+            <div className={s.elevCard}>
+              <div className={s.elevHead}>
+                <span style={{ color: "var(--sage)" }}>TRAIL MAP</span>
+                <span style={{ color: "var(--text-placeholder)" }}>{miles != null ? `${miles} mi` : ""}</span>
+              </div>
+              <TrailPhotoMap line={linePoints} photos={[]} />
+            </div>
+          )}
+
           {/* Sighting probability (recency + seasonality + notable; first-pass preview) */}
           <div className={s.probCard}>
             <div className={s.probHead}>
@@ -394,10 +405,19 @@ export function TrailDetailScreen() {
             ) : (
               <div className={s.ebirdChips}>
                 {species.map((sp) => (
-                  <span key={sp.species_code} className={s.ebirdChip}>
+                  <button
+                    key={sp.species_code}
+                    className={s.ebirdChip}
+                    style={{ cursor: "pointer", border: "none" }}
+                    title={`Find trails for ${sp.common_name}`}
+                    onClick={() => {
+                      setSpeciesFilter({ code: sp.species_code, name: sp.common_name });
+                      navigate("/trails");
+                    }}
+                  >
                     {sp.common_name}
                     <span className={s.ebirdCount}>{sp.observations}</span>
-                  </span>
+                  </button>
                 ))}
               </div>
             )}
