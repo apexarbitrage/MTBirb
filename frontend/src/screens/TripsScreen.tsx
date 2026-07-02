@@ -30,7 +30,7 @@ export function TripsScreen() {
             <div className={s.statNum} style={{ color: "var(--terracotta)" }}>
               {stats.lifeList}
             </div>
-            <div className={s.statLabel}>LIFE LIST</div>
+            <div className={s.statLabel}>BIRDS SPOTTED</div>
           </div>
         </div>
       </div>
@@ -54,7 +54,7 @@ export function TripsScreen() {
                   <div className={common.monoMeta}>{fmtDate(tr.riddenOn)}</div>
                   {tr.lifers > 0 && (
                     <div className={s.liferBadge}>
-                      +{tr.lifers} lifer{tr.lifers > 1 ? "s" : ""}
+                      +{tr.lifers} bird{tr.lifers > 1 ? "s" : ""}
                     </div>
                   )}
                 </div>

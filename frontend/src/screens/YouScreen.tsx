@@ -46,7 +46,7 @@ export function YouScreen() {
     { num: String(stats.rides), label: "RIDES" },
     { num: String(miles), label: "MILES" },
     { num: String(stats.birds), label: "BIRDS" },
-    { num: String(stats.lifeList), label: "LIFE LIST", accent: true },
+    { num: String(stats.lifeList), label: "BIRDS SPOTTED", accent: true },
   ];
 
   const openTrail = (id: string) => {
@@ -74,7 +74,7 @@ export function YouScreen() {
           <div>
             <div className={s.name}>{profile?.name ?? "Set up your profile"}</div>
             <div className={s.sub}>
-              {stats.rides} ride{stats.rides === 1 ? "" : "s"} · {stats.lifeList} life birds · tap to edit
+              {stats.rides} ride{stats.rides === 1 ? "" : "s"} · {stats.lifeList} birds spotted · tap to edit
             </div>
           </div>
         </button>

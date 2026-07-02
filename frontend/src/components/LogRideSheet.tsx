@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { logRide, type TripBird } from "../data/useTrips";
 import { readGeoPhoto, type GeoPhoto } from "../data/photo";
+import { useSpeciesSearch } from "../data/useSpeciesSearch";
 
 interface SpeciesOption {
   speciesCode: string | null;
@@ -34,6 +35,11 @@ export function LogRideSheet({ trail, options, onClose, onLogged }: Props) {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [extra, setExtra] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const { results: allSuggestions } = useSpeciesSearch(draft);
+  const suggestions = allSuggestions.filter(
+    (s) => !candidates.some((c) => c.commonName === s.common_name) && !extra.includes(s.common_name),
+  );
   const [photos, setPhotos] = useState<GeoPhoto[]>([]);
   const [reading, setReading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -64,6 +70,15 @@ export function LogRideSheet({ trail, options, onClose, onLogged }: Props) {
       setExtra((e) => [...e, name]);
     }
     setDraft("");
+    setShowSuggestions(false);
+  };
+
+  const addFromSuggestion = (name: string) => {
+    if (name && !extra.includes(name) && !candidates.some((c) => c.commonName === name)) {
+      setExtra((e) => [...e, name]);
+    }
+    setDraft("");
+    setShowSuggestions(false);
   };
 
   const submit = async () => {
@@ -129,17 +144,34 @@ export function LogRideSheet({ trail, options, onClose, onLogged }: Props) {
           )}
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addExtra()}
-            placeholder="Add another species…"
-            style={{ ...input, flex: 1 }}
-          />
-          <button onClick={addExtra} style={addBtn}>
-            Add
-          </button>
+        <div style={{ position: "relative", marginTop: 10 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              value={draft}
+              onChange={(e) => { setDraft(e.target.value); setShowSuggestions(true); }}
+              onKeyDown={(e) => e.key === "Enter" && addExtra()}
+              onFocus={() => setShowSuggestions(true)}
+              placeholder="Add another species…"
+              style={{ ...input, flex: 1 }}
+            />
+            <button onClick={addExtra} style={addBtn}>
+              Add
+            </button>
+          </div>
+          {showSuggestions && suggestions.length > 0 && (
+            <div style={dropdown}>
+              {suggestions.slice(0, 6).map((s) => (
+                <button
+                  key={s.species_code}
+                  style={dropdownItem}
+                  onMouseDown={(e) => { e.preventDefault(); addFromSuggestion(s.common_name); }}
+                >
+                  <span>{s.common_name}</span>
+                  <span style={{ color: "var(--text-muted)", fontSize: 11, fontStyle: "italic" }}>{s.scientific_name}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <label style={{ ...fieldLabel, marginTop: 16 }}>PHOTOS (mapped by GPS)</label>
@@ -296,6 +328,34 @@ const cancelBtn: React.CSSProperties = {
   background: "transparent",
   color: "var(--text-muted)",
   fontWeight: 700,
+  cursor: "pointer",
+};
+const dropdown: React.CSSProperties = {
+  position: "absolute",
+  top: "100%",
+  left: 0,
+  right: 44,
+  background: "var(--white)",
+  border: "1px solid var(--card-tile-divider)",
+  borderRadius: 10,
+  boxShadow: "0 4px 16px rgba(33,48,42,0.13)",
+  zIndex: 10,
+  marginTop: 4,
+  overflow: "hidden",
+};
+const dropdownItem: React.CSSProperties = {
+  display: "flex",
+  flexDirection: "column",
+  gap: 1,
+  width: "100%",
+  padding: "9px 12px",
+  background: "none",
+  border: "none",
+  borderBottom: "1px solid var(--card-tile-divider)",
+  textAlign: "left",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "var(--ink)",
   cursor: "pointer",
 };
 const saveBtn = (saving: boolean): React.CSSProperties => ({
