@@ -31,6 +31,7 @@ export function TrailsScreen() {
   const speciesView = useSpeciesTrails(speciesFilter?.code ?? null, location.lat, location.lon);
   const { scores: optimalNow } = useOptimalNow(location.lat, location.lon, trailSort === "optimal");
   const [query, setQuery] = useState("");
+  const { results: searchResults } = useTrailSearch(query, location.lat, location.lon);
 
   const open = (id: string) => {
     setDetailTrailId(id);
@@ -138,7 +139,6 @@ export function TrailsScreen() {
     : sorted;
   const arrow = trailDir === "asc" ? "↑" : "↓";
 
-  const { results: searchResults } = useTrailSearch(query, location.lat, location.lon);
   const localIds = new Set(trails.map((t) => t.id));
   const elsewhere = searchResults.filter((r) => !localIds.has(r.id));
 
