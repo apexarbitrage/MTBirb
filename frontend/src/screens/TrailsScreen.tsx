@@ -8,6 +8,8 @@ import { BirdGlyph } from "../components/icons";
 import { useTrails } from "../data/TrailsProvider";
 import { useSpeciesTrails } from "../data/useSpeciesTrails";
 import { useOptimalNow } from "../data/useOptimalNow";
+import { catalogToTrail } from "../data/useCatalogTrails";
+import { useTrailSearch } from "../data/useTrailSearch";
 import {
   TRAIL_SORT_CHIPS,
   TRAIL_SORT_LABELS,
@@ -29,6 +31,7 @@ export function TrailsScreen() {
   const speciesView = useSpeciesTrails(speciesFilter?.code ?? null, location.lat, location.lon);
   const { scores: optimalNow } = useOptimalNow(location.lat, location.lon, trailSort === "optimal");
   const [query, setQuery] = useState("");
+  const { results: searchResults } = useTrailSearch(query, location.lat, location.lon);
 
   const open = (id: string) => {
     setDetailTrailId(id);
@@ -136,12 +139,16 @@ export function TrailsScreen() {
     : sorted;
   const arrow = trailDir === "asc" ? "↑" : "↓";
 
+  const localIds = new Set(trails.map((t) => t.id));
+  const elsewhere = searchResults.filter((r) => !localIds.has(r.id));
+
   return (
     <div className={common.screen}>
       <div className={s.header}>
         <div className={common.eyebrow}>
           {location.label} · {visible.length} trail{visible.length === 1 ? "" : "s"}
-          {q ? ` matching “${query.trim()}”` : ""}
+          {q ? ` matching "${query.trim()}"` : ""}
+          {elsewhere.length > 0 ? ` · ${elsewhere.length} elsewhere` : ""}
         </div>
         <div className={s.titleRow}>
           <div className={common.title}>All trails</div>
@@ -175,46 +182,99 @@ export function TrailsScreen() {
       </div>
 
       <div className={s.list}>
-        {visible.length === 0 ? (
+        {visible.length === 0 && elsewhere.length === 0 && q ? (
           <CenterMessage
             title="No trails match your search"
-            detail={`Nothing near ${location.label} matches “${query.trim()}”.`}
+            detail={`Nothing near ${location.label} or in the trail cache matches "${query.trim()}".`}
           />
         ) : (
-          visible.map((t) => (
-          <button key={t.id} className={s.trailCard} onClick={() => open(t.id)}>
-            <div className={s.cardTop}>
-              {t.diff && <DifficultyMarker diff={t.diff} size={11} />}
-              <div className={s.trailName}>{t.name}</div>
-              <div
-                className={t.score >= 85 ? common.scoreChipHi : common.scoreChipMed}
-                style={{ background: scoreChipBg(t.score), color: scoreColor(t.score) }}
-              >
-                {t.score}
-              </div>
-            </div>
-            <div className={s.cardMeta}>
-              {[
-                t.miles != null ? `${t.miles} mi` : null,
-                t.rideTime != null ? fmtTime(t.rideTime) : null,
-                t.effort != null ? `E${t.effort}` : null,
-                t.diff,
-              ]
-                .filter(Boolean)
-                .join(" · ")}
-            </div>
-            <div className={s.birdRow}>
-              <BirdGlyph fill="var(--terracotta)" eyeFill="#fff" size={16} />
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {t.likelyBirds.map((b) => (
-                  <span key={b} className={s.birdChip}>
-                    {b}
-                  </span>
-                ))}
-              </div>
-            </div>
-          </button>
-          ))
+          <>
+            {visible.length === 0 && q && (
+              <CenterMessage
+                title={`No nearby match for "${query.trim()}"`}
+                detail="Found elsewhere in the cache - see below."
+              />
+            )}
+            {visible.map((t) => (
+              <button key={t.id} className={s.trailCard} onClick={() => open(t.id)}>
+                <div className={s.cardTop}>
+                  {t.diff && <DifficultyMarker diff={t.diff} size={11} />}
+                  <div className={s.trailName}>{t.name}</div>
+                  <div
+                    className={t.score >= 85 ? common.scoreChipHi : common.scoreChipMed}
+                    style={{ background: scoreChipBg(t.score), color: scoreColor(t.score) }}
+                  >
+                    {t.score}
+                  </div>
+                </div>
+                <div className={s.cardMeta}>
+                  {[
+                    t.miles != null ? `${t.miles} mi` : null,
+                    t.rideTime != null ? fmtTime(t.rideTime) : null,
+                    t.effort != null ? `E${t.effort}` : null,
+                    t.diff,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+                <div className={s.birdRow}>
+                  <BirdGlyph fill="var(--terracotta)" eyeFill="#fff" size={16} />
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {t.likelyBirds.map((b) => (
+                      <span key={b} className={s.birdChip}>
+                        {b}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </button>
+            ))}
+            {elsewhere.length > 0 && (
+              <>
+                <div className={common.sectionLabel} style={{ marginTop: visible.length ? 20 : 0 }}>
+                  TRAILS BEYOND YOUR AREA
+                </div>
+                {elsewhere.map((r) => {
+                  const t = catalogToTrail(r);
+                  return (
+                    <button key={t.id} className={s.trailCard} onClick={() => open(t.id)}>
+                      <div className={s.cardTop}>
+                        {t.diff && <DifficultyMarker diff={t.diff} size={11} />}
+                        <div className={s.trailName}>{t.name}</div>
+                        <div
+                          className={(t.score ?? 0) >= 85 ? common.scoreChipHi : common.scoreChipMed}
+                          style={{ background: scoreChipBg(t.score ?? 0), color: scoreColor(t.score ?? 0) }}
+                        >
+                          {t.score ?? "-"}
+                        </div>
+                      </div>
+                      <div className={s.cardMeta}>
+                        {[
+                          t.miles != null ? `${t.miles} mi` : null,
+                          t.rideTime != null ? fmtTime(t.rideTime) : null,
+                          t.effort != null ? `E${t.effort}` : null,
+                          t.diff,
+                          `${r.distanceMi} mi away`,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                      <div className={s.birdRow}>
+                        <BirdGlyph fill="var(--terracotta)" eyeFill="#fff" size={16} />
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                          {t.likelyBirds.map((b) => (
+                            <span key={b} className={s.birdChip}>
+                              {b}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </>
+            )}
+          </>
         )}
       </div>
 

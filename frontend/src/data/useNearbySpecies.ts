@@ -30,7 +30,7 @@ export function useNearbySpecies(lat: number, lon: number, notableOnly: boolean)
   useEffect(() => {
     const controller = new AbortController();
     apiGet<SpeciesResponse>(
-      `/catalog/species?lat=${lat}&lon=${lon}&radius_km=25&limit=20&notable_only=${notableOnly}`,
+      `/catalog/species?lat=${lat}&lon=${lon}&radius_km=25&limit=50&notable_only=${notableOnly}`,
       controller.signal,
     )
       .then((d) => {

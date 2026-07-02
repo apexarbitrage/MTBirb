@@ -35,6 +35,7 @@ from app.services.trail_catalog import (
     line_points,
     nearby_trails,
     recent_species_near_catalog,
+    search_catalog_trails,
     sightings_near_count,
 )
 from app.services.trail_metrics import bulk_compute_metrics, ensure_metrics
@@ -138,9 +139,10 @@ async def list_species_near(
 
     Syncs the area's eBird feeds once if the cache is sparse, like the trail list does."""
     synced_now = 0
-    if sightings_near_count(db, lat, lon, radius_km=15) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
-        synced_now += await sync_recent_observations(db, lat, lon, dist_km=15, back_days=30)
-        synced_now += await sync_notable_observations(db, lat, lon, dist_km=25, back_days=30)
+    sync_dist = min(int(radius_km), 50)  # eBird geo endpoints cap at 50 km
+    if sightings_near_count(db, lat, lon, radius_km=radius_km) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
+        synced_now += await sync_recent_observations(db, lat, lon, dist_km=sync_dist, back_days=30)
+        synced_now += await sync_notable_observations(db, lat, lon, dist_km=sync_dist, back_days=30)
 
     species = species_near(db, lat, lon, radius_m=radius_km * 1000, limit=limit if not notable_only else 60)
     if notable_only:
@@ -158,8 +160,50 @@ async def search_species(
     nearby sightings, unlike /species (which only lists species someone has actually reported).
     Lazily syncs the ~16k-row taxonomy cache from eBird once, on first use."""
     if not has_taxonomy(db) and get_settings().ebird_api_key:
-        await sync_taxonomy(db)
+        try:
+            await sync_taxonomy(db)
+        except Exception:
+            pass  # Return whatever's in the table; don't 500 the user on a sync hiccup.
     return {"query": q, "species": search_taxonomy(db, q, limit=limit)}
+
+
+@router.post("/sync-taxonomy")
+async def sync_taxonomy_endpoint(db: Session = Depends(get_db)) -> dict:
+    """Explicitly (re)populate the eBird taxonomy cache. Run once after applying migration 0011,
+    and again whenever the taxonomy needs refreshing (~twice a year). Requires EBIRD_API_KEY."""
+    if not get_settings().ebird_api_key:
+        raise HTTPException(status_code=503, detail="EBIRD_API_KEY not configured")
+    count = await sync_taxonomy(db)
+    return {"synced": count}
+
+
+@router.get("/trails-search")
+async def search_trails(
+    q: str = Query(..., min_length=1, max_length=80),
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    limit: int = Query(20, ge=1, le=50),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Search the cached trail catalog by name, ordered nearest-first.
+
+    Returns trails from anywhere in the cache — not just those within the current location's
+    radius. Only trails already cached are searchable; new regions populate as they're browsed."""
+    results = search_catalog_trails(db, q, lat, lon, limit)
+    if not results:
+        return {"query": q, "count": 0, "trails": []}
+    trails_only = [t for t, _ in results]
+    scores = score_catalog_trails(db, [t.id for t in trails_only], buffer_m=_AREA_BUFFER_M)
+    versions = versions_for(db, [t.external_id for t in trails_only])
+    out = []
+    for trail, dist_mi in results:
+        item = CatalogTrailOut.from_model(
+            trail,
+            scores.get(trail.id),
+            photo_version=versions.get(trail.external_id),
+        )
+        out.append({**item.model_dump(), "distanceMi": round(dist_mi, 1)})
+    return {"query": q, "count": len(out), "trails": out}
 
 
 @router.get("/trails/{external_id}")
