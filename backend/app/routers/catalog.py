@@ -27,6 +27,7 @@ from app.services.optimal_ride_time import (
     score_now,
     score_optimal_window,
 )
+from app.services.species_taxonomy import has_taxonomy, search_taxonomy, sync_taxonomy
 from app.services.trail_conditions import assess_surface, grade_pct, per_trail_surface_factor
 from app.services.trail_catalog import (
     cache_trails_near,
@@ -145,6 +146,20 @@ async def list_species_near(
     if notable_only:
         species = [s for s in species if s["notable"]][:limit]
     return {"count": len(species), "syncedNow": synced_now, "species": species}
+
+
+@router.get("/species-search")
+async def search_species(
+    q: str = Query(..., min_length=1, max_length=80),
+    limit: int = Query(20, ge=1, le=50),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Search the *full* eBird taxonomy by common name - finds a species even with zero current
+    nearby sightings, unlike /species (which only lists species someone has actually reported).
+    Lazily syncs the ~16k-row taxonomy cache from eBird once, on first use."""
+    if not has_taxonomy(db) and get_settings().ebird_api_key:
+        await sync_taxonomy(db)
+    return {"query": q, "species": search_taxonomy(db, q, limit=limit)}
 
 
 @router.get("/trails/{external_id}")

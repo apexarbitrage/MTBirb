@@ -71,3 +71,18 @@ class EBirdClient:
             )
             response.raise_for_status()
             return response.json()
+
+    async def taxonomy(self) -> list[dict]:
+        """The full eBird species taxonomy (~16k rows): speciesCode, comName, sciName, etc.
+
+        eBird has no free-text search over this - it's a bulk reference list, meant to be
+        fetched once and cached/searched locally (see app/services/species_taxonomy.py). Scoped
+        to `cat=species` (excludes hybrids/slashes/spuhs/forms), which is what a name search
+        should offer a user.
+        """
+        async with httpx.AsyncClient(base_url=EBIRD_BASE_URL, headers=self._headers()) as client:
+            response = await client.get(
+                "/ref/taxonomy/ebird", params={"fmt": "json", "cat": "species"}
+            )
+            response.raise_for_status()
+            return response.json()

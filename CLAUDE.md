@@ -78,7 +78,11 @@ now runs on the **live backend**, not the design's static sample data:
   + `useGeolocation` → `GET /catalog/trails`), with the recency/season/notable wildlife score,
   OSM-derived elevation, eBird species, and NWS weather.
 - Targeting (Birbs) ranks trails by a chosen species' live odds (`GET /catalog/species`,
-  `?species=` on the trail list); its filter lives in `AppState.speciesFilter`.
+  `?species=` on the trail list); its filter lives in `AppState.speciesFilter`. Its search box
+  also queries `GET /catalog/species-search`, which matches against the *full* eBird taxonomy
+  (cached locally in `ebird_taxa`, synced once from eBird's `/ref/taxonomy/ebird` since that
+  endpoint has no free-text search) - so a rider can target a species with zero current nearby
+  reports, shown as a separate "not reported nearby" row rather than with odds.
 - Trips is a real logged-ride store (`GET`/`POST /trips`): the log-ride sheet on the trail detail
   records species (checked off the trail's eBird birds or typed in) and geotagged photos
   (`exifr` reads EXIF GPS client-side; only a downscaled thumbnail + coords are kept), mapped onto
