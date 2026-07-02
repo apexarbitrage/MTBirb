@@ -139,9 +139,10 @@ async def list_species_near(
 
     Syncs the area's eBird feeds once if the cache is sparse, like the trail list does."""
     synced_now = 0
-    if sightings_near_count(db, lat, lon, radius_km=15) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
-        synced_now += await sync_recent_observations(db, lat, lon, dist_km=15, back_days=30)
-        synced_now += await sync_notable_observations(db, lat, lon, dist_km=25, back_days=30)
+    sync_dist = min(int(radius_km), 50)  # eBird geo endpoints cap at 50 km
+    if sightings_near_count(db, lat, lon, radius_km=radius_km) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
+        synced_now += await sync_recent_observations(db, lat, lon, dist_km=sync_dist, back_days=30)
+        synced_now += await sync_notable_observations(db, lat, lon, dist_km=sync_dist, back_days=30)
 
     species = species_near(db, lat, lon, radius_m=radius_km * 1000, limit=limit if not notable_only else 60)
     if notable_only:
@@ -159,8 +160,21 @@ async def search_species(
     nearby sightings, unlike /species (which only lists species someone has actually reported).
     Lazily syncs the ~16k-row taxonomy cache from eBird once, on first use."""
     if not has_taxonomy(db) and get_settings().ebird_api_key:
-        await sync_taxonomy(db)
+        try:
+            await sync_taxonomy(db)
+        except Exception:
+            pass  # Return whatever's in the table; don't 500 the user on a sync hiccup.
     return {"query": q, "species": search_taxonomy(db, q, limit=limit)}
+
+
+@router.post("/sync-taxonomy")
+async def sync_taxonomy_endpoint(db: Session = Depends(get_db)) -> dict:
+    """Explicitly (re)populate the eBird taxonomy cache. Run once after applying migration 0011,
+    and again whenever the taxonomy needs refreshing (~twice a year). Requires EBIRD_API_KEY."""
+    if not get_settings().ebird_api_key:
+        raise HTTPException(status_code=503, detail="EBIRD_API_KEY not configured")
+    count = await sync_taxonomy(db)
+    return {"synced": count}
 
 
 @router.get("/trails-search")

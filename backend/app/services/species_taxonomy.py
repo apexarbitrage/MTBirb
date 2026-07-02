@@ -29,17 +29,29 @@ def rank_by_name(matches: list[dict], query: str) -> list[dict]:
 
 
 def has_taxonomy(db: Session) -> bool:
-    return db.scalar(select(EbirdTaxon.species_code).limit(1)) is not None
+    try:
+        return db.scalar(select(EbirdTaxon.species_code).limit(1)) is not None
+    except Exception:
+        return False  # table probably doesn't exist yet (migration pending)
 
 
 async def sync_taxonomy(db: Session, client: EBirdClient | None = None) -> int:
     """Fetch the full taxonomy from eBird and (re)populate the local cache. Returns row count."""
+    from sqlalchemy import delete as sa_delete, insert as sa_insert
+
     client = client or EBirdClient()
     records = await client.taxonomy()
-    db.query(EbirdTaxon).delete()
-    db.bulk_save_objects([t for r in records if (t := taxon_from_record(r)) is not None])
+    rows = [
+        {"species_code": t.species_code, "common_name": t.common_name, "scientific_name": t.scientific_name}
+        for r in records
+        if (t := taxon_from_record(r)) is not None
+    ]
+    if not rows:
+        return 0
+    db.execute(sa_delete(EbirdTaxon))
+    db.execute(sa_insert(EbirdTaxon), rows)
     db.commit()
-    return db.query(EbirdTaxon).count()
+    return len(rows)
 
 
 def search_taxonomy(db: Session, query: str, limit: int = 20) -> list[dict]:
