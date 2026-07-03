@@ -6,12 +6,13 @@ import { ScoreRing } from "../components/ScoreRing";
 import { Photo } from "../components/Photo";
 import { CenterMessage } from "../components/CenterMessage";
 import { LogRideSheet } from "../components/LogRideSheet";
-import { TrailPhotoMap } from "../components/TrailPhotoMap";
+import { TrailMap } from "../components/TrailMap";
 import { useCatalogDetail } from "../data/useCatalogDetail";
 import { useTrips } from "../data/useTrips";
 import { shortSky } from "../data/useTrailWeather";
 import { useOptimalTime } from "../data/useOptimalTime";
 import { trailPhotoUrl, fmtTime, normalizeDifficulty } from "../data/trails";
+import { DifficultyMarker } from "../components/DifficultyMarker";
 import { CameraIcon, HeartIcon } from "../components/icons";
 import { makeImageBlob } from "../data/photo";
 import { apiDelete, apiPostBlob } from "../api/client";
@@ -159,7 +160,7 @@ export function TrailDetailScreen() {
           )}
           {diff && (
             <div className={s.diffPill}>
-              <div style={{ width: 10, height: 10, background: "var(--forest-1a)", transform: "rotate(45deg)", border: "1px solid #fff" }} />
+              <DifficultyMarker diff={diff} size={10} onDark />
               <span className={s.diffPillText}>{diff}</span>
             </div>
           )}
@@ -345,14 +346,18 @@ export function TrailDetailScreen() {
             </div>
           )}
 
-          {/* Trail line map */}
+          {/* Trail line over TomTom terrain (satellite + labels), with any geotagged photo pins */}
           {linePoints && linePoints.length > 1 && (
             <div className={s.elevCard}>
               <div className={s.elevHead}>
                 <span style={{ color: "var(--sage)" }}>TRAIL MAP</span>
-                <span style={{ color: "var(--text-placeholder)" }}>{miles != null ? `${miles} mi` : ""}</span>
+                <span style={{ color: "var(--text-placeholder)" }}>
+                  {[miles != null ? `${miles} mi` : null, myPhotos.length ? `${myPhotos.length} photo${myPhotos.length === 1 ? "" : "s"}` : null]
+                    .filter(Boolean)
+                    .join(" · ") || "TomTom"}
+                </span>
               </div>
-              <TrailPhotoMap line={linePoints} photos={[]} />
+              <TrailMap line={linePoints} photos={myPhotos} height={220} />
             </div>
           )}
 
@@ -423,17 +428,6 @@ export function TrailDetailScreen() {
             )}
           </div>
 
-          {myPhotos.length > 0 && linePoints && linePoints.length > 1 && (
-            <div className={s.elevCard}>
-              <div className={s.elevHead}>
-                <span style={{ color: "var(--sage)" }}>YOUR PHOTOS ON THIS TRAIL</span>
-                <span style={{ color: "var(--text-placeholder)" }}>
-                  {myPhotos.length} mapped by GPS
-                </span>
-              </div>
-              <TrailPhotoMap line={linePoints} photos={myPhotos} />
-            </div>
-          )}
         </div>
       </div>
 
