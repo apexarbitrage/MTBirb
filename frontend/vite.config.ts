@@ -11,10 +11,12 @@ export default defineConfig({
     allowedHosts: ['.devtunnels.ms'], //allow devtunnels.ms to proxy to this server (for LAN access from a phone)
     host: true,
     proxy: {
+      // Forward /api straight through - the backend serves its routes under /api (see
+      // backend/app/main.py), so dev and the single-origin production container use the exact
+      // same paths. (No rewrite: the prefix is the contract, not a dev-only artifact.)
       "/api": {
         target: "http://localhost:8000",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },
   },

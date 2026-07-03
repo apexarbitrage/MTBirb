@@ -9,6 +9,34 @@ services:
       - "5432:5432"
     volumes:
       - postgis_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mtbirb -d mtbirb"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  # The full single-origin app (API + built PWA in one container). Runs migrations on start and
+  # serves everything on http://localhost:8000. Bring the whole stack up with:
+  #   docker compose up --build
+  # (Just want Postgres for local backend/frontend dev? `docker compose up postgis`.)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgis:
+        condition: service_healthy
+    environment:
+      # Points at the postgis service on the compose network (overrides any localhost value the
+      # optional backend/.env below might carry).
+      DATABASE_URL: postgresql+psycopg://mtbirb:mtbirb@postgis:5432/mtbirb
+    # API keys (EBIRD_API_KEY / RAPIDAPI_KEY / TOMTOM_API_KEY / WEATHER_USER_AGENT) are read from
+    # backend/.env if present. Optional: the app boots and degrades gracefully without them.
+    env_file:
+      - path: backend/.env
+        required: false
+    ports:
+      - "8000:8000"
 
 volumes:
   postgis_data:

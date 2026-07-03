@@ -51,9 +51,11 @@ npm install
 
 ## Architecture
 
-Monorepo with two independently-run services: `backend/` (FastAPI + PostgreSQL/PostGIS) and
-`frontend/` (React/Vite PWA). They're not deployed as one process - the frontend talks to the
-backend over HTTP, proxied under `/api` in dev (see `frontend/vite.config.ts`).
+Monorepo with two independently-run services in dev: `backend/` (FastAPI + PostgreSQL/PostGIS) and
+`frontend/` (React/Vite PWA). In dev the frontend talks to the backend over HTTP, proxied under
+`/api` (see `frontend/vite.config.ts`). For deployment they collapse into **one single-origin
+container** (root `Dockerfile`): the FastAPI app serves both the API (under `/api`) and the built
+PWA from the same origin, so there's no CORS/reverse-proxy layer - see "Deploying" in `README.md`.
 
 ### Backend structure
 
@@ -67,7 +69,13 @@ backend over HTTP, proxied under `/api` in dev (see `frontend/vite.config.ts`).
   (`OpenMeteoElevation`, `UsgsElevation`) behind a common `lookup(points)`.
 - `app/services/` - cross-cutting logic that doesn't belong to one model or one integration
   (`wildlife_likelihood.py`, `catalog_geometry.py`, `trail_metrics.py`, ...).
-- `app/routers/` - FastAPI route modules, included in `app/main.py`.
+- `app/routers/` - FastAPI route modules, included in `app/main.py` under an **`/api` prefix**
+  (e.g. `/api/catalog/trails`); only the `/health` probe stays at the root. The PWA's api client
+  (`frontend/src/api/client.ts`) and the Vite dev proxy both target `/api`, so the same paths work
+  in dev and in the single-origin container. `app/main.py` also serves the built PWA when
+  `FRONTEND_DIST` points at Vite's `dist/` (hashed assets via `StaticFiles`, everything else
+  falling back to `index.html` for client-side routing); that block is skipped when `FRONTEND_DIST`
+  is unset (local dev / tests).
 
 ### Frontend structure
 
