@@ -12,6 +12,7 @@ import { useTrips } from "../data/useTrips";
 import { shortSky } from "../data/useTrailWeather";
 import { useOptimalTime } from "../data/useOptimalTime";
 import { trailPhotoUrl, fmtTime, normalizeDifficulty } from "../data/trails";
+import { DifficultyMarker } from "../components/DifficultyMarker";
 import { CameraIcon, HeartIcon } from "../components/icons";
 import { makeImageBlob } from "../data/photo";
 import { apiDelete, apiPostBlob } from "../api/client";
@@ -159,7 +160,7 @@ export function TrailDetailScreen() {
           )}
           {diff && (
             <div className={s.diffPill}>
-              <div style={{ width: 10, height: 10, background: "var(--forest-1a)", transform: "rotate(45deg)", border: "1px solid #fff" }} />
+              <DifficultyMarker diff={diff} size={10} onDark />
               <span className={s.diffPillText}>{diff}</span>
             </div>
           )}
