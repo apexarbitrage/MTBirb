@@ -9,13 +9,14 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
+from app.security import require_admin
 from app.integrations.trailapi import TrailApiClient
 from app.services.trail_geometry import assign_real_geometry
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
 
-@router.post("/osm/sync-geometry")
+@router.post("/osm/sync-geometry", dependencies=[Depends(require_admin)])
 async def sync_osm_geometry(db: Session = Depends(get_db)) -> dict:
     """Replace seeded trails' placeholder lines with real OSM geometry near each locale."""
     summary = await assign_real_geometry(db)

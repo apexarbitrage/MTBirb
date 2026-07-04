@@ -69,8 +69,14 @@ Dev server runs on `http://localhost:5173` and proxies `/api/*` to the backend o
 
 > All backend routes are served under `/api` (e.g. `GET /api/catalog/trails`), except the
 > root `/health` probe. The PWA's api client and the dev proxy both target `/api`, so the same
-> paths work in dev and in the production container below. Direct API calls / ops endpoints use
-> the prefix too, e.g. `curl -X POST http://localhost:8000/api/catalog/backfill-history?...`.
+> paths work in dev and in the production container below.
+>
+> The **ops endpoints** (`/api/catalog/sync`, `/sync-taxonomy`, `/backfill-history`,
+> `/enrich-geometry`, `/compute-metrics`, `/api/wildlife/sync`, `/api/sources/osm/sync-geometry`)
+> are gated by `ADMIN_TOKEN` — send it as an `X-Admin-Token` header. They fan out to metered APIs
+> and the public Overpass instance, so they're disabled (503) unless `ADMIN_TOKEN` is set:
+> `curl -X POST -H "X-Admin-Token: $ADMIN_TOKEN" "http://localhost:8000/api/catalog/backfill-history?..."`.
+> (The `python -m app.seed_*` scripts talk to the services directly and need no token.)
 
 ## Deploying (single-origin container)
 
@@ -93,7 +99,8 @@ To run somewhere real (Fly.io, Railway, Render, a VM, ...):
 2. Provision managed **Postgres + PostGIS** and set `DATABASE_URL` (use `sslmode=require` for most
    managed providers). The extension is created by the first migration.
 3. Inject secrets as **environment variables** (not a committed `.env`): `EBIRD_API_KEY`,
-   `RAPIDAPI_KEY`, `TOMTOM_API_KEY`, `WEATHER_USER_AGENT` (NWS requires a real contact string).
+   `RAPIDAPI_KEY`, `TOMTOM_API_KEY`, `WEATHER_USER_AGENT` (NWS requires a real contact string), and
+   `ADMIN_TOKEN` (gates the ops endpoints; leave unset in prod to keep them disabled).
 4. The container runs `alembic upgrade head` on start, then `uvicorn` on `:8000`
    (set `WEB_CONCURRENCY` for worker count). Point a health check at `/health`.
 5. Seed the region once it's up, e.g. `docker compose exec app python -m app.seed_catalog`

@@ -3,12 +3,13 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
+from app.security import require_admin
 from app.services.wildlife_sync import sync_recent_observations
 
 router = APIRouter(prefix="/wildlife", tags=["wildlife"])
 
 
-@router.post("/sync")
+@router.post("/sync", dependencies=[Depends(require_admin)])
 async def sync_observations(
     lat: float = Query(..., ge=-90, le=90),
     lng: float = Query(..., ge=-180, le=180),

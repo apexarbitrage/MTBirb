@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
+from app.security import require_admin
 from app.integrations.elevation import OpenMeteoElevation, UsgsElevation
 from app.integrations.precipitation import OpenMeteoPrecip
 from app.integrations.tomtom import TomTomClient, TomTomNotConfigured
@@ -167,7 +168,7 @@ async def search_species(
     return {"query": q, "species": search_taxonomy(db, q, limit=limit)}
 
 
-@router.post("/sync-taxonomy")
+@router.post("/sync-taxonomy", dependencies=[Depends(require_admin)])
 async def sync_taxonomy_endpoint(db: Session = Depends(get_db)) -> dict:
     """Explicitly (re)populate the eBird taxonomy cache. Run once after applying migration 0011,
     and again whenever the taxonomy needs refreshing (~twice a year). Requires EBIRD_API_KEY."""
@@ -453,7 +454,7 @@ async def export_trail_gpx(external_id: str, db: Session = Depends(get_db)) -> R
     )
 
 
-@router.post("/backfill-history")
+@router.post("/backfill-history", dependencies=[Depends(require_admin)])
 async def backfill_history(
     region_code: str = Query(..., description="eBird region, e.g. a county like US-CA-081"),
     year: int = Query(..., ge=2000, le=2100),
@@ -466,7 +467,7 @@ async def backfill_history(
     return await backfill_region_history(db, region_code, year, day=day)
 
 
-@router.post("/enrich-geometry")
+@router.post("/enrich-geometry", dependencies=[Depends(require_admin)])
 async def enrich_geometry(
     south: float = Query(...),
     west: float = Query(...),
@@ -481,7 +482,7 @@ async def enrich_geometry(
     return await enrich_region(db, (south, north), (west, east), max_calls=max_calls, force=force)
 
 
-@router.post("/compute-metrics")
+@router.post("/compute-metrics", dependencies=[Depends(require_admin)])
 async def compute_metrics(
     south: float = Query(...),
     west: float = Query(...),
@@ -498,7 +499,7 @@ async def compute_metrics(
     )
 
 
-@router.post("/sync")
+@router.post("/sync", dependencies=[Depends(require_admin)])
 async def sync_catalog(
     lat: float = Query(..., ge=-90, le=90),
     lon: float = Query(..., ge=-180, le=180),
