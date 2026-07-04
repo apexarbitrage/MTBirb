@@ -1,0 +1,23 @@
+# Keep the build context small and secrets out of the image.
+.git
+**/.git
+
+# Secrets - never bake .env into the image; env vars are injected at runtime.
+backend/.env
+**/.env
+
+# Python
+**/__pycache__/
+**/*.pyc
+backend/.venv/
+backend/.pytest_cache/
+**/.ruff_cache/
+
+# Node / frontend build artifacts (the image rebuilds these from source)
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# Misc
+**/.DS_Store
+*.log

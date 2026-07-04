@@ -67,6 +67,38 @@ npm run dev
 
 Dev server runs on `http://localhost:5173` and proxies `/api/*` to the backend on port 8000.
 
+> All backend routes are served under `/api` (e.g. `GET /api/catalog/trails`), except the
+> root `/health` probe. The PWA's api client and the dev proxy both target `/api`, so the same
+> paths work in dev and in the production container below. Direct API calls / ops endpoints use
+> the prefix too, e.g. `curl -X POST http://localhost:8000/api/catalog/backfill-history?...`.
+
+## Deploying (single-origin container)
+
+For a beta deploy, one container serves both the API and the built PWA from the same origin, so
+there's no CORS or reverse-proxy layer to configure - the frontend's `/api` contract just works.
+
+```bash
+docker compose up --build         # Postgres + the app on http://localhost:8000
+```
+
+This brings up PostGIS and the `app` image (built from the root `Dockerfile`: a Vite build stage
+feeds its `dist/` into the FastAPI runtime, which serves it via `FRONTEND_DIST`). Migrations run
+automatically on start (`backend/docker-entrypoint.sh`). API keys are read from `backend/.env` if
+present (optional; the app degrades gracefully without them).
+
+To run somewhere real (Fly.io, Railway, Render, a VM, ...):
+
+1. Build and push the root `Dockerfile` (add `--build-arg INSTALL_BIRDNET=true` to include the
+   optional local BirdNET sound-ID model; off by default to keep the image small).
+2. Provision managed **Postgres + PostGIS** and set `DATABASE_URL` (use `sslmode=require` for most
+   managed providers). The extension is created by the first migration.
+3. Inject secrets as **environment variables** (not a committed `.env`): `EBIRD_API_KEY`,
+   `RAPIDAPI_KEY`, `TOMTOM_API_KEY`, `WEATHER_USER_AGENT` (NWS requires a real contact string).
+4. The container runs `alembic upgrade head` on start, then `uvicorn` on `:8000`
+   (set `WEB_CONCURRENCY` for worker count). Point a health check at `/health`.
+5. Seed the region once it's up, e.g. `docker compose exec app python -m app.seed_catalog`
+   (needs `RAPIDAPI_KEY`), then run the per-region history backfill for wildlife seasonality.
+
 ## License
 
 GPLv3 - see `LICENSE`.
