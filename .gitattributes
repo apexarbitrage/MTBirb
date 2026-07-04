@@ -1,0 +1,14 @@
+# Shell scripts must stay LF so they run in the Linux container regardless of the committer's OS.
+# A CRLF entrypoint makes the shebang `/bin/sh\r` and the container fails to start with
+# "exec ./docker-entrypoint.sh: no such file or directory".
+*.sh text eol=lf
+backend/docker-entrypoint.sh text eol=lf
+
+# Treat binary assets as binary so line-ending normalization never corrupts them (matters for the
+# PWA icons dropped into frontend/public/).
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.webp binary
+*.gif binary

@@ -41,7 +41,10 @@ ENV FRONTEND_DIST=/app/frontend/dist
 # Run alembic + the server from the backend source tree (alembic.ini + alembic/ live here; the
 # `app` package itself is installed into site-packages).
 WORKDIR /app/backend
-RUN chmod +x docker-entrypoint.sh
+# Strip any CRLF line endings before making it executable: a Windows checkout can rewrite the
+# script to CRLF, which makes the shebang `/bin/sh\r` and the container fail to start with
+# "exec ./docker-entrypoint.sh: no such file or directory". (.gitattributes also pins it to LF.)
+RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
 
 EXPOSE 8000
 ENTRYPOINT ["./docker-entrypoint.sh"]
