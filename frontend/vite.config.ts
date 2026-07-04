@@ -11,10 +11,12 @@ export default defineConfig({
     allowedHosts: ['.devtunnels.ms'], //allow devtunnels.ms to proxy to this server (for LAN access from a phone)
     host: true,
     proxy: {
+      // Forward /api straight through - the backend serves its routes under /api (see
+      // backend/app/main.py), so dev and the single-origin production container use the exact
+      // same paths. (No rewrite: the prefix is the contract, not a dev-only artifact.)
       "/api": {
         target: "http://localhost:8000",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },
   },
@@ -23,6 +25,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      // Favicon + apple-touch aren't build outputs, so precache them explicitly (they live in
+      // public/ and are served from the root).
+      includeAssets: ["favicon.svg", "apple-touch-icon.png"],
       manifest: {
         name: "MTBirb",
         short_name: "MTBirb",
@@ -30,8 +35,14 @@ export default defineConfig({
         theme_color: "#2f5d3a",
         background_color: "#2f5d3a",
         display: "standalone",
-        // TODO: add real icons (192x192, 512x512) under public/icons before shipping -
-        // installability/Lighthouse PWA checks need them, omitted here to avoid a broken reference.
+        // Icons live in public/ and are served from the root. "maskable" gives Android/iOS an
+        // adaptive icon (art kept inside the safe zone); the two "any" sizes cover install +
+        // Lighthouse installability.
+        icons: [
+          { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
+        ],
       },
     }),
   ],
