@@ -76,6 +76,13 @@ PWA from the same origin, so there's no CORS/reverse-proxy layer - see "Deployin
   `FRONTEND_DIST` points at Vite's `dist/` (hashed assets via `StaticFiles`, everything else
   falling back to `index.html` for client-side routing); that block is skipped when `FRONTEND_DIST`
   is unset (local dev / tests).
+- `app/security.py` - the `require_admin` dependency gating the **destructive / quota-burning ops
+  endpoints** (`catalog` sync / sync-taxonomy / backfill-history / enrich-geometry / compute-metrics,
+  `wildlife/sync`, `sources/osm/sync-geometry`) behind an `X-Admin-Token` header matching
+  `ADMIN_TOKEN`. Fails closed: unset `ADMIN_TOKEN` → those endpoints are 503 (disabled), so a public
+  deploy can't be abused to burn eBird quota or get the server IP Overpass-banned. Browse/read routes
+  and genuine user actions (log a ride, BirdNET identify, set a hero photo) are intentionally open -
+  their abuse vector is per-user auth (not built yet), not an admin token.
 
 ### Frontend structure
 
