@@ -5,6 +5,7 @@ cached it first fetches the nearest 50 from TrailAPI and caches them, so the cat
 as areas are browsed (within the request quota).
 """
 
+import asyncio
 import logging
 from datetime import UTC, datetime
 
@@ -443,8 +444,12 @@ async def catalog_trail_drive(
     origin, destination = (from_lat, from_lon), (trail.lat, trail.lon)
     client = TomTomClient()
     try:
-        fun = await client.calculate_route(origin, destination, route_type="thrilling")
-        fastest = await client.calculate_route(origin, destination, route_type="fastest")
+        # Run the two routing calls concurrently (the thrilling route is the slow one) so the
+        # screen isn't waiting on them in series.
+        fun, fastest = await asyncio.gather(
+            client.calculate_route(origin, destination, route_type="thrilling"),
+            client.calculate_route(origin, destination, route_type="fastest"),
+        )
     except TomTomNotConfigured as exc:
         raise HTTPException(status_code=503, detail="set TOMTOM_API_KEY to enable fun-drive routing") from exc
     except Exception as exc:  # noqa: BLE001 - TomTom hiccup / no route found

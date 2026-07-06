@@ -29,6 +29,30 @@ class TomTomNotConfigured(RuntimeError):
     """Raised when TOMTOM_API_KEY isn't set - callers turn this into a 503."""
 
 
+# One process-wide pooled client so the two routing calls and the many tile fetches reuse
+# keep-alive connections to TomTom instead of re-handshaking TLS on every request (the map alone
+# pulls a screen's worth of tiles). Created lazily inside the event loop; closed on app shutdown
+# via aclose_shared_client() (see app/main.py). httpx.AsyncClient is safe for concurrent use.
+_shared_client: httpx.AsyncClient | None = None
+
+
+def _client() -> httpx.AsyncClient:
+    global _shared_client
+    if _shared_client is None or _shared_client.is_closed:
+        _shared_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(20.0, connect=10.0),
+            limits=httpx.Limits(max_keepalive_connections=20, max_connections=40),
+        )
+    return _shared_client
+
+
+async def aclose_shared_client() -> None:
+    global _shared_client
+    if _shared_client is not None and not _shared_client.is_closed:
+        await _shared_client.aclose()
+    _shared_client = None
+
+
 class TomTomClient:
     def __init__(self, api_key: str | None = None) -> None:
         self._key = api_key if api_key is not None else get_settings().tomtom_api_key
@@ -59,10 +83,9 @@ class TomTomClient:
         if route_type == "thrilling":
             params.update(windingness=windingness, hilliness=hilliness)
 
-        async with httpx.AsyncClient(timeout=20) as client:
-            resp = await client.get(f"{TOMTOM_ROUTING_URL}/{locations}/json", params=params)
-            resp.raise_for_status()
-            data = resp.json()
+        resp = await _client().get(f"{TOMTOM_ROUTING_URL}/{locations}/json", params=params)
+        resp.raise_for_status()
+        data = resp.json()
 
         route = data["routes"][0]
         summary = route["summary"]
@@ -85,7 +108,6 @@ class TomTomClient:
             raise TomTomNotConfigured("TOMTOM_API_KEY not set")
         path, ext, media_type = TILE_LAYERS.get(layer, TILE_LAYERS["basic"])
         url = f"{TOMTOM_TILE_BASE}/{path}/main/{z}/{x}/{y}.{ext}"
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(url, params={"key": self._key})
-            resp.raise_for_status()
-            return resp.content, media_type
+        resp = await _client().get(url, params={"key": self._key})
+        resp.raise_for_status()
+        return resp.content, media_type
