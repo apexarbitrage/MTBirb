@@ -100,7 +100,9 @@ To run somewhere real (Fly.io, Railway, Render, a VM, ...):
    managed providers). The extension is created by the first migration.
 3. Inject secrets as **environment variables** (not a committed `.env`): `EBIRD_API_KEY`,
    `RAPIDAPI_KEY`, `TOMTOM_API_KEY`, `WEATHER_USER_AGENT` (NWS requires a real contact string), and
-   `ADMIN_TOKEN` (gates the ops endpoints; leave unset in prod to keep them disabled).
+   `ADMIN_TOKEN` (gates the ops endpoints; leave unset in prod to keep them disabled). For
+   observability set `LOG_FORMAT=json` (machine-readable logs) and, optionally, `SENTRY_DSN`
+   (error tracking — captures backend exceptions and forwarded frontend crashes; inert when unset).
 4. The container runs `alembic upgrade head` on start, then `uvicorn` on `:8000`
    (set `WEB_CONCURRENCY` for worker count). Point a **liveness** check at `/health` (cheap, no
    DB) and a **readiness** check at `/ready` (verifies Postgres answers; 503 when it doesn't).

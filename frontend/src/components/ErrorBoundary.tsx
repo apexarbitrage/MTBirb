@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { reportClientError } from "../api/reportError";
 import s from "./ErrorBoundary.module.css";
 
 /*
@@ -27,8 +28,11 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    // Keep the crash visible in the console for debugging / future error-tracking hookup.
     console.error("Uncaught render error:", error, info.componentStack);
+    reportClientError(error.message, {
+      kind: "react",
+      stack: `${error.stack ?? ""}\n--- component stack ---${info.componentStack ?? ""}`,
+    });
   }
 
   private handleReload = (): void => {

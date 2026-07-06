@@ -76,6 +76,12 @@ PWA from the same origin, so there's no CORS/reverse-proxy layer - see "Deployin
   `FRONTEND_DIST` points at Vite's `dist/` (hashed assets via `StaticFiles`, everything else
   falling back to `index.html` for client-side routing); that block is skipped when `FRONTEND_DIST`
   is unset (local dev / tests).
+- `app/logging_config.py` + `app/observability.py` - **structured logging** (`configure_logging`
+  wires a stdout handler via dictConfig; `LOG_FORMAT=json` for aggregation, `LOG_LEVEL` tunes it) and
+  **optional Sentry** (`init_sentry` is a no-op unless `SENTRY_DSN` is set). Both run once at import
+  in `main.py`. The PWA's `ErrorBoundary` + global handlers POST crashes to `POST /api/client-errors`
+  (`routers/errors.py`), which logs them and forwards to Sentry - so field white-screens aren't
+  invisible, with no client-side Sentry bundle/DSN (see `frontend/src/api/reportError.ts`).
 - `app/security.py` - the `require_admin` dependency gating the **destructive / quota-burning ops
   endpoints** (`catalog` sync / sync-taxonomy / backfill-history / enrich-geometry / compute-metrics,
   `wildlife/sync`, `sources/osm/sync-geometry`) behind an `X-Admin-Token` header matching
