@@ -19,7 +19,7 @@ const emptyNote: React.CSSProperties = {
 export function YouScreen() {
   const navigate = useNavigate();
   const { profile, favorites, wishlist, toggleWishlist } = useProfile();
-  const { trips, stats } = useTrips();
+  const { trips, stats, error: tripsError, reload: reloadTrips } = useTrips();
   const { setSpeciesFilter, setDetailTrailId } = useAppState();
   const [editing, setEditing] = useState(false);
 
@@ -78,6 +78,13 @@ export function YouScreen() {
             </div>
           </div>
         </button>
+
+        {tripsError && (
+          <div className={s.loadError}>
+            <span>Couldn't load your ride stats.</span>
+            <button className={s.loadRetry} onClick={reloadTrips}>Retry</button>
+          </div>
+        )}
 
         <div className={s.statGroup}>
           {statTiles.map((st) => (
