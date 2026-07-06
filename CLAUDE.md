@@ -291,7 +291,10 @@ column will create a redundant duplicate index, not a missing one.
 - **"Fun drive" / twisty-road routing** (`app/integrations/tomtom.py`): real, via TomTom's Routing
   API `routeType=thrilling` (with `windingness`/`hilliness`) - it scores curvature for us, so no
   custom OSM-curvature layer was needed. `GET /catalog/trails/{id}/drive` returns both the thrilling
-  and fastest routes (server-side; the key stays in `.env`, read via settings, 503 when unset). A
+  and fastest routes (server-side; the key stays in `.env`, read via settings, 503 when unset) - the
+  two routing calls run concurrently (`asyncio.gather`), and all TomTom calls (routing + the tile
+  proxy) share one pooled `httpx.AsyncClient` (`tomtom._client()`, closed on shutdown) so they reuse
+  keep-alive connections instead of re-handshaking per request. A
   twistiness read is derived from the route geometry (`services/drive_route.curviness`, density-
   invariant total-turning-per-km) and `sample_waypoints` thins the route for the **maps-app handoff**:
   the `FunDriveNavScreen` "Start drive" opens Google Maps with those waypoints so the actual drive

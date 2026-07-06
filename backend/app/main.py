@@ -45,6 +45,10 @@ async def _warm_taxonomy() -> None:
 async def lifespan(app: FastAPI):
     asyncio.create_task(_warm_taxonomy())
     yield
+    # Release the pooled TomTom HTTP connections on shutdown.
+    from app.integrations.tomtom import aclose_shared_client
+
+    await aclose_shared_client()
 
 
 app = FastAPI(title="MTBirb API", lifespan=lifespan)
