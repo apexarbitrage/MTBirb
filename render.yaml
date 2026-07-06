@@ -1,0 +1,54 @@
+# Render Blueprint (https://render.com/docs/blueprint-spec) - deploys MTBirb as one always-on
+# web service (the single-origin Docker image: SPA + API) plus a managed Postgres/PostGIS database.
+#
+# First deploy: push this to your default branch, then in Render → "New +" → "Blueprint", pick this
+# repo. Render creates both services and wires DATABASE_URL automatically. Fill the sync:false
+# secrets (below) in the dashboard once. After that, every push to `main` auto-builds and redeploys
+# the web service; the database is a separate persistent service, so trails/sightings/trips/photos
+# survive deploys. Migrations run on container start (backend/docker-entrypoint.sh).
+#
+# Confirm the `plan`/`region` slugs against Render's current options when you import (Render
+# validates the Blueprint and will flag any it doesn't recognize).
+
+databases:
+  - name: mtbirb-db
+    databaseName: mtbirb
+    user: mtbirb
+    plan: basic-256mb        # cheapest always-on tier (~$6/mo); the "free" plan expires
+    region: virginia         # US-East (good for CT/NY testers); use "oregon" for a West-coast bias
+    postgresMajorVersion: "16"
+    # PostGIS is created by the first Alembic migration (CREATE EXTENSION postgis); Render allows it.
+
+services:
+  - type: web
+    name: mtbirb
+    runtime: docker          # build the root Dockerfile (Vite build -> FastAPI runtime serving it)
+    dockerfilePath: ./Dockerfile
+    plan: starter            # always-on (~$7/mo); no cold starts
+    region: virginia         # keep the same region as the database (fast, no-SSL internal link)
+    branch: main
+    autoDeploy: true         # redeploy on every push to `main`
+    healthCheckPath: /health # liveness (cheap, no DB); the app also exposes /ready (DB-checked)
+    envVars:
+      - key: DATABASE_URL    # internal connection string; the app rewrites the scheme to psycopg
+        fromDatabase:
+          name: mtbirb-db
+          property: connectionString
+      - key: LOG_FORMAT
+        value: json          # structured logs for Render's log viewer
+      - key: WEB_CONCURRENCY
+        value: "2"
+      # Secrets - set these once in the Render dashboard (Environment tab). sync:false keeps them
+      # out of this file / git.
+      - key: EBIRD_API_KEY
+        sync: false
+      - key: RAPIDAPI_KEY
+        sync: false
+      - key: TOMTOM_API_KEY
+        sync: false
+      - key: WEATHER_USER_AGENT
+        sync: false
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: SENTRY_DSN      # optional error tracking; leave blank to disable
+        sync: false

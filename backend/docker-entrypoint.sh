@@ -17,5 +17,8 @@ until alembic upgrade head; do
   sleep 3
 done
 
-echo "Starting uvicorn on 0.0.0.0:8000 (WEB_CONCURRENCY=${WEB_CONCURRENCY:-2})..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers "${WEB_CONCURRENCY:-2}"
+# Bind the port the platform assigns (Render/Fly/Cloud Run inject $PORT); default 8000 for
+# docker-compose and local runs.
+PORT="${PORT:-8000}"
+echo "Starting uvicorn on 0.0.0.0:${PORT} (WEB_CONCURRENCY=${WEB_CONCURRENCY:-2})..."
+exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT}" --workers "${WEB_CONCURRENCY:-2}"

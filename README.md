@@ -67,10 +67,12 @@ python -m app.seed_region ny --no-trails         # eBird only (doesn't touch the
 python -m app.seed_region ct --max-trail-calls 20
 ```
 
-Wildlife is the bigger latency win and eBird is lenient, so if TrailAPI quota is tight, seed
-wildlife first (`--no-trails`), then add trails in capped batches - a re-run resumes where it left
-off. Geometry/elevation aren't seeded here (they load lazily per trail-detail, and bulk Overpass
-sweeps risk an IP ban).
+Our TrailAPI calls hit `/trails/explore` (a "Regular Request" - 500/day on RapidAPI's free Basic
+plan), so a full `--all` sweep (~200 calls) fits in a single day; we don't touch the small "Map
+Data" quota (maps are TomTom, not TrailAPI). If you're ever quota-limited, `--no-trails` seeds just
+the (lenient) eBird data, and `--max-trail-calls` caps a run - either way a re-run resumes where it
+left off. Geometry/elevation aren't seeded here (they load lazily per trail-detail, and bulk
+Overpass sweeps risk an IP ban).
 
 ### Frontend
 
@@ -123,6 +125,25 @@ To run somewhere real (Fly.io, Railway, Render, a VM, ...):
    DB) and a **readiness** check at `/ready` (verifies Postgres answers; 503 when it doesn't).
 5. Seed the region once it's up, e.g. `docker compose exec app python -m app.seed_catalog`
    (needs `RAPIDAPI_KEY`), then run the per-region history backfill for wildlife seasonality.
+
+### One-click-ish deploy on Render (recommended for a beta)
+
+A [`render.yaml`](./render.yaml) Blueprint is included - it provisions the always-on web service
+(the single-origin Docker image) **and** a managed Postgres/PostGIS database, and wires
+`DATABASE_URL` between them. Steps:
+
+1. In Render, **New + → Blueprint**, pick this repo. It creates both services from `render.yaml`.
+2. Fill the `sync:false` secrets in the web service's **Environment** tab: `EBIRD_API_KEY`,
+   `RAPIDAPI_KEY`, `TOMTOM_API_KEY`, `WEATHER_USER_AGENT`, `ADMIN_TOKEN`, (optional `SENTRY_DSN`).
+3. First deploy runs `alembic upgrade head` automatically (creating the PostGIS extension + tables),
+   then serves on Render's HTTPS URL. Health check is `/health`.
+4. Seed data against the deployed DB from the service **Shell**: `python -m app.seed_region --all`.
+
+After that, **every push to `main` auto-builds and redeploys** the web service; the database is a
+separate persistent service, so trails/sightings/trips/photos (and any rider's hero photos) survive
+deploys. The app rewrites Render's `postgres://` connection string to the psycopg driver and binds
+Render's injected `$PORT` automatically. (Any other Docker host works the same way - the Blueprint
+is just Render's convenience wrapper around the same image + env vars from step 3 above.)
 
 ## License
 
