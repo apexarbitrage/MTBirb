@@ -8,7 +8,13 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
-from app.routers import birdnet, catalog, health, map, sources, trails, trips, wildlife
+from app.logging_config import configure_logging
+from app.observability import init_sentry
+from app.routers import birdnet, catalog, errors, health, map, sources, trails, trips, wildlife
+
+# Configure structured logging + optional Sentry before anything logs or the app is built.
+configure_logging()
+init_sentry()
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +63,7 @@ api.include_router(catalog.router)
 api.include_router(trips.router)
 api.include_router(birdnet.router)
 api.include_router(map.router)
+api.include_router(errors.router)
 app.include_router(api)
 
 
