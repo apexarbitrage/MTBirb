@@ -123,7 +123,11 @@ hourly forecast). With the You tab now live, every screen runs on real data - no
 static. `src/data/trails.ts` now holds just the shared `Trail` type + helpers, not sample rows.
 
 - `src/screens/` - one component + co-located CSS Module per screen, routed in `src/App.tsx`
-  (React Router). Flow screens have no bottom nav and use `BackButton`.
+  (React Router). Flow screens have no bottom nav and use `BackButton`. `AboutScreen` (`/about`,
+  linked from the You tab) is the static **privacy / terms / data-source credits** page - it carries
+  the open-data attribution the sources require (OpenStreetMap/ODbL, eBird, NWS/USGS, BirdNET,
+  TomTom). The Leaflet maps also show on-map attribution (OSM + TomTom); don't set
+  `attributionControl:false`.
 - `src/components/` - shared UI: `BottomNav`, `DifficultyMarker`, `ScoreRing`, `Photo`
   (the design's `image-slot` → a real `<img>` with a palette fallback), `icons.tsx` (all custom
   inline-SVG icons), `BirdIdFab`, `BackButton`, `SearchField` (the rounded search box atop the

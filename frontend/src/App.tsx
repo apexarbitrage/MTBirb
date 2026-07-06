@@ -9,6 +9,7 @@ import { TrailDetailScreen } from "./screens/TrailDetailScreen";
 import { OptimalTimeScreen } from "./screens/OptimalTimeScreen";
 import { FunDriveNavScreen } from "./screens/FunDriveNavScreen";
 import { BirdIdScreen } from "./screens/BirdIdScreen";
+import { AboutScreen } from "./screens/AboutScreen";
 import { ProfileSheet } from "./components/ProfileSheet";
 import { useAppState } from "./state/AppState";
 import { useProfile } from "./state/ProfileContext";
@@ -41,6 +42,7 @@ export function App() {
         <Route path="/optimal-time" element={<OptimalTimeScreen />} />
         <Route path="/navigate" element={<FunDriveNavScreen />} />
         <Route path="/bird-id" element={<BirdIdScreen />} />
+        <Route path="/about" element={<AboutScreen />} />
         <Route path="/catalog" element={<Navigate to="/trails" replace />} />
         <Route path="/catalog/:id" element={<CatalogRedirect />} />
         <Route path="*" element={<Navigate to="/" replace />} />

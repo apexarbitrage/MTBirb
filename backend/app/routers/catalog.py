@@ -5,6 +5,7 @@ cached it first fetches the nearest 50 from TrailAPI and caches them, so the cat
 as areas are browsed (within the request quota).
 """
 
+import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
+from app.media import sniff_image
 from app.security import require_admin
 from app.integrations.elevation import OpenMeteoElevation, UsgsElevation
 from app.integrations.precipitation import OpenMeteoPrecip
@@ -59,6 +61,7 @@ from app.services.wildlife_sync import (
 )
 
 router = APIRouter(prefix="/catalog", tags=["catalog"])
+logger = logging.getLogger(__name__)
 
 # Below this many cached trails within the search radius, trigger a one-off TrailAPI fetch.
 _MIN_CACHED = 8
@@ -87,19 +90,28 @@ async def list_catalog_trails(
     species: str | None = Query(None, description="rank by this eBird species code's odds"),
     db: Session = Depends(get_db),
 ) -> dict:
+    # These opportunistic fetches are a nice-to-have: they warm the cache for a freshly-browsed
+    # area. If a third-party call fails (bad key, quota, timeout), degrade to whatever's cached
+    # rather than 500-ing the main trail list.
     fetched_now = 0
-    if count_nearby(db, lat, lon, radius_km) < _MIN_CACHED and get_settings().rapidapi_key:
-        # TrailAPI radius is in miles; cap at its useful range.
-        fetched_now = await cache_trails_near(db, lat, lon, radius=min(int(radius_km * 0.62) + 1, 100))
+    try:
+        if count_nearby(db, lat, lon, radius_km) < _MIN_CACHED and get_settings().rapidapi_key:
+            # TrailAPI radius is in miles; cap at its useful range.
+            fetched_now = await cache_trails_near(db, lat, lon, radius=min(int(radius_km * 0.62) + 1, 100))
+    except Exception:  # noqa: BLE001 - cache warming is best-effort
+        logger.warning("opportunistic TrailAPI cache failed; serving cached trails", exc_info=True)
 
     # The wildlife score reads cached sightings; sync the area once if it's sparse so a
     # newly-browsed region isn't scored against an empty cache. Both feeds: the common-species
     # recent feed (activity) and the notable feed (rare sightings).
     synced_now = 0
     back = min(lookback_days, 30)  # eBird's recent feeds cap at back=30
-    if sightings_near_count(db, lat, lon, radius_km=15) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
-        synced_now += await sync_recent_observations(db, lat, lon, dist_km=15, back_days=back)
-        synced_now += await sync_notable_observations(db, lat, lon, dist_km=25, back_days=back)
+    try:
+        if sightings_near_count(db, lat, lon, radius_km=15) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
+            synced_now += await sync_recent_observations(db, lat, lon, dist_km=15, back_days=back)
+            synced_now += await sync_notable_observations(db, lat, lon, dist_km=25, back_days=back)
+    except Exception:  # noqa: BLE001 - eBird warming is best-effort
+        logger.warning("opportunistic eBird sync failed; scoring on cached sightings", exc_info=True)
 
     trails = nearby_trails(db, lat, lon, radius_km, limit)
     ids = [t.id for t in trails]
@@ -141,9 +153,12 @@ async def list_species_near(
     Syncs the area's eBird feeds once if the cache is sparse, like the trail list does."""
     synced_now = 0
     sync_dist = min(int(radius_km), 50)  # eBird geo endpoints cap at 50 km
-    if sightings_near_count(db, lat, lon, radius_km=radius_km) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
-        synced_now += await sync_recent_observations(db, lat, lon, dist_km=sync_dist, back_days=30)
-        synced_now += await sync_notable_observations(db, lat, lon, dist_km=sync_dist, back_days=30)
+    try:
+        if sightings_near_count(db, lat, lon, radius_km=radius_km) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
+            synced_now += await sync_recent_observations(db, lat, lon, dist_km=sync_dist, back_days=30)
+            synced_now += await sync_notable_observations(db, lat, lon, dist_km=sync_dist, back_days=30)
+    except Exception:  # noqa: BLE001 - eBird warming is best-effort; serve cached species
+        logger.warning("opportunistic eBird sync failed; listing cached species", exc_info=True)
 
     species = species_near(db, lat, lon, radius_m=radius_km * 1000, limit=limit if not notable_only else 60)
     if notable_only:
@@ -242,9 +257,11 @@ async def upload_trail_photo(external_id: str, request: Request, db: Session = D
         raise HTTPException(status_code=400, detail="no image uploaded")
     if len(data) > _MAX_PHOTO_BYTES:
         raise HTTPException(status_code=413, detail="image too large")
-    content_type = request.headers.get("content-type", "image/jpeg")
-    if not content_type.startswith("image/"):
-        raise HTTPException(status_code=415, detail="expected an image upload")
+    # Validate the actual bytes, not the (spoofable) Content-Type header, and store the sniffed
+    # type so we never serve back mislabeled/arbitrary content.
+    content_type = sniff_image(data)
+    if content_type is None:
+        raise HTTPException(status_code=415, detail="expected a JPEG, PNG, WebP, or GIF image")
     photo = upsert_photo(db, trail.external_id, data, content_type)
     return {"trail": external_id, "photoVersion": photo_version(photo.updated_at)}
 
@@ -280,8 +297,11 @@ async def catalog_trail_wildlife(
     """Species recently reported to eBird near the trail; syncs eBird here on demand if sparse."""
     trail = _get_catalog_or_404(db, external_id)
     synced = 0
-    if sightings_near_count(db, trail.lat, trail.lon, radius_km=15) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
-        synced = await sync_recent_observations(db, trail.lat, trail.lon, dist_km=15, back_days=lookback_days)
+    try:
+        if sightings_near_count(db, trail.lat, trail.lon, radius_km=15) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
+            synced = await sync_recent_observations(db, trail.lat, trail.lon, dist_km=15, back_days=lookback_days)
+    except Exception:  # noqa: BLE001 - eBird warming is best-effort; serve cached species
+        logger.warning("opportunistic eBird sync failed on wildlife detail", exc_info=True)
     # Catalog trails are point-based, so this is an area-level signal (eBird checklists cluster
     # at hotspots that are rarely right on an arbitrary trailhead), labelled honestly as such.
     species = recent_species_near_catalog(db, trail.id, buffer_m=_AREA_BUFFER_M, lookback_days=lookback_days)
@@ -290,9 +310,14 @@ async def catalog_trail_wildlife(
 
 @router.get("/trails/{external_id}/weather")
 async def catalog_trail_weather(external_id: str, db: Session = Depends(get_db)) -> dict:
-    """NWS forecast at the trail's location."""
+    """NWS forecast at the trail's location. NWS is US-only and occasionally flaky, so a failure
+    degrades to an empty forecast (the UI treats no periods as "no weather") rather than a 500."""
     trail = _get_catalog_or_404(db, external_id)
-    periods = await WeatherClient().forecast(trail.lat, trail.lon)
+    try:
+        periods = await WeatherClient().forecast(trail.lat, trail.lon)
+    except Exception:  # noqa: BLE001 - weather is supplementary; never fail the detail on it
+        logger.info("NWS forecast unavailable for %s; returning no periods", external_id, exc_info=True)
+        return {"trail": external_id, "periods": []}
     trimmed = [
         {
             "name": p.get("name"),

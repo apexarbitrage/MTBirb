@@ -1,0 +1,36 @@
+.backRow {
+  margin-bottom: 14px;
+}
+
+.note {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  margin: 8px 0 20px;
+}
+
+.list {
+  list-style: disc;
+  padding-left: 18px;
+  margin: 6px 0 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.list li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.link {
+  color: var(--terracotta);
+  text-decoration: underline;
+}
+
+.footer {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}

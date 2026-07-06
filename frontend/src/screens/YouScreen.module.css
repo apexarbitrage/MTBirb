@@ -74,3 +74,16 @@
   padding: 7px 12px;
   border-radius: var(--radius-pill);
 }
+
+.legalLink {
+  display: block;
+  margin: 28px auto 4px;
+  padding: 6px 4px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}

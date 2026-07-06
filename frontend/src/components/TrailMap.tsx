@@ -35,7 +35,9 @@ export function TrailMap({ line, photos = [], height = 200 }: Props) {
     if (!mapEl.current || mapObj.current) return;
     const map = L.map(mapEl.current, {
       zoomControl: false,
-      attributionControl: false,
+      // Keep attribution on (the trail line is OSM-derived; tiles are TomTom) - it's a license
+      // obligation. `prefix: false` drops the "Leaflet" flag to keep the small preview uncluttered.
+      attributionControl: true,
       dragging: false,
       scrollWheelZoom: false,
       doubleClickZoom: false,
@@ -43,7 +45,10 @@ export function TrailMap({ line, photos = [], height = 200 }: Props) {
       boxZoom: false,
       keyboard: false,
     });
-    L.tileLayer("/api/map/tile/{z}/{x}/{y}?layer=sat", { minZoom: 3, maxZoom: 18 }).addTo(map);
+    map.attributionControl.setPrefix(false);
+    const credit =
+      '© TomTom · Trail data © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors';
+    L.tileLayer("/api/map/tile/{z}/{x}/{y}?layer=sat", { minZoom: 3, maxZoom: 18, attribution: credit }).addTo(map);
     L.tileLayer("/api/map/tile/{z}/{x}/{y}?layer=hybrid", { minZoom: 3, maxZoom: 18 }).addTo(map);
     mapObj.current = map;
     requestAnimationFrame(() => map.invalidateSize());

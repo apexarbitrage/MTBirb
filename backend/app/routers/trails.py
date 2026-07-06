@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -9,6 +11,7 @@ from app.schemas.trail import TrailOut
 from app.services.wildlife_likelihood import recent_species_near_trail
 
 router = APIRouter(prefix="/trails", tags=["trails"])
+logger = logging.getLogger(__name__)
 
 
 def _get_trail_or_404(db: Session, slug: str) -> Trail:
@@ -52,7 +55,11 @@ async def trail_weather(slug: str, db: Session = Depends(get_db)) -> dict:
         ).where(Trail.id == trail.id)
     ).one()
 
-    periods = await WeatherClient().forecast(lat, lon)
+    try:
+        periods = await WeatherClient().forecast(lat, lon)
+    except Exception:  # noqa: BLE001 - weather is supplementary; degrade to no periods, not a 500
+        logger.info("NWS forecast unavailable for %s; returning no periods", slug, exc_info=True)
+        return {"trail": slug, "point": {"lat": lat, "lon": lon}, "periods": []}
     trimmed = [
         {
             "name": p.get("name"),

@@ -151,6 +151,10 @@ export function YouScreen() {
             ))}
           </div>
         )}
+
+        <button className={s.legalLink} onClick={() => navigate("/about")}>
+          Privacy &amp; credits
+        </button>
       </div>
 
       <BottomNav active="you" />

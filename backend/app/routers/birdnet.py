@@ -7,6 +7,7 @@ optional lat/lon query params for BirdNET's location filter.
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.integrations.birdnet import BirdNetClient
+from app.media import is_wav
 
 router = APIRouter(prefix="/birdnet", tags=["birdnet"])
 
@@ -24,6 +25,10 @@ async def identify(
         raise HTTPException(status_code=400, detail="no audio uploaded")
     if len(audio) > _MAX_AUDIO_BYTES:
         raise HTTPException(status_code=413, detail="audio clip too large")
+    # The client records a WAV; reject anything else up front so arbitrary bytes never reach the
+    # audio decoder (which would raise deep inside and surface as a 500).
+    if not is_wav(audio):
+        raise HTTPException(status_code=415, detail="expected a WAV audio clip")
     try:
         detections = await BirdNetClient().identify_from_audio(audio, lat, lon)
     except ModuleNotFoundError as exc:
