@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -7,6 +8,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = "postgresql+psycopg://mtbirb:mtbirb@localhost:5432/mtbirb"
+
+    @field_validator("database_url")
+    @classmethod
+    def _use_psycopg_driver(cls, url: str) -> str:
+        """Managed Postgres hosts (Render, Neon, ...) hand out `postgres://` / `postgresql://`
+        URLs; force the psycopg (v3) driver we depend on so SQLAlchemy doesn't reach for psycopg2."""
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://") :]
+        if url.startswith("postgresql://") and "+" not in url.split("://", 1)[0]:
+            url = "postgresql+psycopg://" + url[len("postgresql://") :]
+        return url
     ebird_api_key: str = ""
     weather_user_agent: str = "mtbirb (set WEATHER_USER_AGENT in .env)"
     rapidapi_key: str = ""  # for TrailAPI (RapidAPI); see app/integrations/trailapi.py
