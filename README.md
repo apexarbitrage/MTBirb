@@ -57,6 +57,21 @@ weather and Open-Meteo/USGS elevation need no key). A `RAPIDAPI_KEY` (TrailAPI) 
 discover trails in *other* regions on demand, and its free tier is heavily rate-limited - the
 sample seed avoids it entirely. `python -m app.seed_catalog` does the full TrailAPI grid sweep.
 
+To **pre-seed whole regions** so testers there never hit the on-demand "cold load," use
+`python -m app.seed_region` - it sweeps a grid caching trails (TrailAPI) + wildlife (eBird
+recent/notable) + a seasonality backfill, skipping already-populated cells (so runs are resumable):
+
+```bash
+python -m app.seed_region --all                 # every known region (norcal, ct, ny)
+python -m app.seed_region ny --no-trails         # eBird only (doesn't touch the TrailAPI quota)
+python -m app.seed_region ct --max-trail-calls 20
+```
+
+Wildlife is the bigger latency win and eBird is lenient, so if TrailAPI quota is tight, seed
+wildlife first (`--no-trails`), then add trails in capped batches - a re-run resumes where it left
+off. Geometry/elevation aren't seeded here (they load lazily per trail-detail, and bulk Overpass
+sweeps risk an IP ban).
+
 ### Frontend
 
 ```bash

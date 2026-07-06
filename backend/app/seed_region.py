@@ -1,0 +1,181 @@
+"""Pre-seed whole regions so testers there get instant, fully-scored trail loads.
+
+Browsing fills the catalog on demand, but the first visit to a fresh area pays a TrailAPI +
+eBird round-trip (the "cold load"). This sweeps a grid over a region and primes both caches up
+front: TrailAPI trails and eBird sightings (recent + notable) per cell, then a per-region
+seasonality backfill. Cells that are already populated are skipped, so a run is resumable and
+re-running is cheap (important because the TrailAPI free tier is rate-limited).
+
+Trail geometry (OSM) and elevation metrics are intentionally NOT seeded here - they load lazily
+when a trail's detail opens, and bulk Overpass sweeps risk getting the server IP banned. This
+script only needs what makes the *list* fast: trails + wildlife + seasonality.
+
+Run in the container, e.g.:
+    docker compose exec app python -m app.seed_region --all
+    docker compose exec app python -m app.seed_region norcal ct ny
+    docker compose exec app python -m app.seed_region ny --no-trails      # wildlife only (save TrailAPI quota)
+
+Needs RAPIDAPI_KEY (trails) and EBIRD_API_KEY (wildlife + seasonality); a missing key skips that pass.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+from dataclasses import dataclass
+from datetime import UTC, datetime
+
+from app.config import get_settings
+from app.db import SessionLocal
+from app.services.trail_catalog import cache_trails_near, count_nearby, sightings_near_count
+from app.services.wildlife_sync import (
+    backfill_region_history,
+    sync_notable_observations,
+    sync_recent_observations,
+)
+
+# eBird geo endpoints cap the radius at 50 km; TrailAPI takes miles.
+_EBIRD_DIST_KM = 50
+_TRAIL_RADIUS_MI = 25
+# A cell already at/above these is considered seeded and skipped (matches the endpoints' gates:
+# trails _MIN_CACHED=8, sightings _MIN_SIGHTINGS=20).
+_TRAIL_SKIP_AT = 8
+_WILDLIFE_SKIP_AT = 20
+
+
+@dataclass(frozen=True)
+class Region:
+    key: str
+    label: str
+    lat_range: tuple[float, float]
+    lon_range: tuple[float, float]
+    step: float  # grid spacing in degrees (~0.6deg ≈ 40 mi)
+    ebird_regions: tuple[str, ...]  # for the seasonality backfill
+
+
+REGIONS: dict[str, Region] = {
+    "norcal": Region("norcal", "Northern California", (37.5, 42.0), (-124.2, -119.8), 0.6, ("US-CA",)),
+    "ct": Region("ct", "Connecticut", (40.98, 42.06), (-73.73, -71.78), 0.35, ("US-CT",)),
+    "ny": Region("ny", "New York", (40.48, 45.02), (-79.77, -71.85), 0.6, ("US-NY",)),
+}
+
+
+def grid(region: Region, step: float | None = None) -> list[tuple[float, float]]:
+    """The (lat, lon) sweep points covering a region's bounding box."""
+    s = step or region.step
+    points: list[tuple[float, float]] = []
+    lat = region.lat_range[0]
+    while lat <= region.lat_range[1] + 1e-9:
+        lon = region.lon_range[0]
+        while lon <= region.lon_range[1] + 1e-9:
+            points.append((round(lat, 4), round(lon, 4)))
+            lon += s
+        lat += s
+    return points
+
+
+async def seed_region(
+    region: Region,
+    *,
+    year: int,
+    do_trails: bool = True,
+    do_wildlife: bool = True,
+    do_seasonality: bool = True,
+    step: float | None = None,
+    max_trail_calls: int | None = None,
+) -> None:
+    settings = get_settings()
+    have_trailapi = bool(settings.rapidapi_key)
+    have_ebird = bool(settings.ebird_api_key)
+    if do_trails and not have_trailapi:
+        print("  ! RAPIDAPI_KEY not set - skipping trail seeding")
+    if (do_wildlife or do_seasonality) and not have_ebird:
+        print("  ! EBIRD_API_KEY not set - skipping wildlife + seasonality seeding")
+
+    cells = grid(region, step)
+    print(f"== {region.label}: {len(cells)} grid cells (step {step or region.step}°) ==")
+
+    db = SessionLocal()
+    trails_added = sightings_added = trail_calls = 0
+    try:
+        for i, (lat, lon) in enumerate(cells, start=1):
+            tag = f"[{i}/{len(cells)}] ({lat}, {lon})"
+
+            if do_trails and have_trailapi and (max_trail_calls is None or trail_calls < max_trail_calls):
+                if count_nearby(db, lat, lon, radius_km=40) >= _TRAIL_SKIP_AT:
+                    print(f"{tag} trails: already cached, skip")
+                else:
+                    try:
+                        added = await cache_trails_near(db, lat, lon, radius=_TRAIL_RADIUS_MI)
+                        trails_added += added
+                        trail_calls += 1
+                        print(f"{tag} trails: +{added}")
+                    except Exception as exc:  # noqa: BLE001 - keep sweeping past one bad cell
+                        print(f"{tag} trails: error {exc}")
+                    await asyncio.sleep(0.2)
+
+            if do_wildlife and have_ebird:
+                if sightings_near_count(db, lat, lon, radius_km=15) >= _WILDLIFE_SKIP_AT:
+                    print(f"{tag} wildlife: already cached, skip")
+                else:
+                    try:
+                        recent, notable = await asyncio.gather(
+                            sync_recent_observations(db, lat, lon, dist_km=_EBIRD_DIST_KM, back_days=30),
+                            sync_notable_observations(db, lat, lon, dist_km=_EBIRD_DIST_KM, back_days=30),
+                        )
+                        sightings_added += recent + notable
+                        print(f"{tag} wildlife: +{recent + notable}")
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"{tag} wildlife: error {exc}")
+                    await asyncio.sleep(0.2)
+
+        if do_seasonality and have_ebird:
+            for code in region.ebird_regions:
+                try:
+                    summary = await backfill_region_history(db, code, year)
+                    print(f"  seasonality {code} ({year}): {summary}")
+                except Exception as exc:  # noqa: BLE001
+                    print(f"  seasonality {code}: error {exc}")
+    finally:
+        db.close()
+    print(f"== {region.label} done: +{trails_added} trails, +{sightings_added} sightings "
+          f"({trail_calls} TrailAPI calls) ==\n")
+
+
+async def _run(args: argparse.Namespace) -> None:
+    keys = list(REGIONS) if args.all else args.regions
+    year = args.year or (datetime.now(UTC).year - 1)  # last complete year for full-season history
+    for key in keys:
+        region = REGIONS.get(key)
+        if region is None:
+            print(f"unknown region '{key}' (known: {', '.join(REGIONS)})")
+            continue
+        await seed_region(
+            region,
+            year=year,
+            do_trails=not args.no_trails,
+            do_wildlife=not args.no_wildlife,
+            do_seasonality=not args.no_seasonality,
+            step=args.step,
+            max_trail_calls=args.max_trail_calls,
+        )
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(description="Pre-seed regions (trails + wildlife + seasonality).")
+    p.add_argument("regions", nargs="*", help=f"region keys: {', '.join(REGIONS)}")
+    p.add_argument("--all", action="store_true", help="seed every known region")
+    p.add_argument("--year", type=int, help="seasonality backfill year (default: last year)")
+    p.add_argument("--step", type=float, help="override grid spacing in degrees")
+    p.add_argument("--max-trail-calls", type=int, help="cap TrailAPI calls per region (quota guard)")
+    p.add_argument("--no-trails", action="store_true", help="skip TrailAPI trail seeding")
+    p.add_argument("--no-wildlife", action="store_true", help="skip eBird sighting seeding")
+    p.add_argument("--no-seasonality", action="store_true", help="skip the seasonality backfill")
+    args = p.parse_args()
+    if not args.regions and not args.all:
+        p.error("name at least one region, or pass --all")
+    asyncio.run(_run(args))
+
+
+if __name__ == "__main__":
+    main()
