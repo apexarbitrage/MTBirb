@@ -109,8 +109,14 @@ async def list_catalog_trails(
     back = min(lookback_days, 30)  # eBird's recent feeds cap at back=30
     try:
         if sightings_near_count(db, lat, lon, radius_km=15) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
-            synced_now += await sync_recent_observations(db, lat, lon, dist_km=15, back_days=back)
-            synced_now += await sync_notable_observations(db, lat, lon, dist_km=25, back_days=back)
+            # Run the two eBird feed fetches concurrently (this is the main "cold area" latency).
+            # Sharing `db` is safe: upsert_sightings has no await, so the DB writes/commits never
+            # interleave under gather - only the two HTTP calls overlap.
+            recent, notable = await asyncio.gather(
+                sync_recent_observations(db, lat, lon, dist_km=15, back_days=back),
+                sync_notable_observations(db, lat, lon, dist_km=25, back_days=back),
+            )
+            synced_now = recent + notable
     except Exception:  # noqa: BLE001 - eBird warming is best-effort
         logger.warning("opportunistic eBird sync failed; scoring on cached sightings", exc_info=True)
 
@@ -156,8 +162,12 @@ async def list_species_near(
     sync_dist = min(int(radius_km), 50)  # eBird geo endpoints cap at 50 km
     try:
         if sightings_near_count(db, lat, lon, radius_km=radius_km) < _MIN_SIGHTINGS and get_settings().ebird_api_key:
-            synced_now += await sync_recent_observations(db, lat, lon, dist_km=sync_dist, back_days=30)
-            synced_now += await sync_notable_observations(db, lat, lon, dist_km=sync_dist, back_days=30)
+            # Concurrent feed fetches (safe on the shared session - upsert_sightings has no await).
+            recent, notable = await asyncio.gather(
+                sync_recent_observations(db, lat, lon, dist_km=sync_dist, back_days=30),
+                sync_notable_observations(db, lat, lon, dist_km=sync_dist, back_days=30),
+            )
+            synced_now = recent + notable
     except Exception:  # noqa: BLE001 - eBird warming is best-effort; serve cached species
         logger.warning("opportunistic eBird sync failed; listing cached species", exc_info=True)
 
