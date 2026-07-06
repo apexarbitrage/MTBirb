@@ -26,7 +26,8 @@ export function TargetingScreen() {
   const [query, setQuery] = useState("");
 
   const usesPicker = segment !== 1; // "Most wildlife" ranks every trail, no species needed
-  const { species } = useNearbySpecies(location.lat, location.lon, segment === 2);
+  const { species, loading: speciesLoading, error: speciesError, reload: reloadSpecies } =
+    useNearbySpecies(location.lat, location.lon, segment === 2);
   const { results: taxonomyResults } = useSpeciesSearch(usesPicker ? query : "");
 
   // Filter the nearby-species picker by name (client-side over what's reported near you).
@@ -146,8 +147,14 @@ export function TargetingScreen() {
             <div className={common.sectionLabel} style={{ marginTop: 20 }}>
               {segment === 2 ? "NOTABLE NEAR YOU" : "LIKELY NEAR YOU"} · {location.label}
             </div>
-            {species === null ? (
+            {speciesLoading ? (
               <CenterMessage title="Loading species…" />
+            ) : speciesError && filtered.length === 0 && extra.length === 0 ? (
+              <CenterMessage
+                title="Couldn't load species"
+                detail="Check your connection and try again."
+                onRetry={reloadSpecies}
+              />
             ) : filtered.length === 0 && extra.length === 0 ? (
               q ? (
                 <CenterMessage title={`No species match “${query.trim()}”`} detail="Try a different name or mode." />

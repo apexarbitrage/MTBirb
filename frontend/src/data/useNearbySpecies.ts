@@ -1,7 +1,8 @@
 /*
  * Species reported near a location, ranked by recency+seasonality odds (GET /api/catalog/species).
  * Drives the targeting picker. `notableOnly` switches to the "Rarest" feed. Keyed by query so a
- * stale response is never shown; fails soft to an empty list.
+ * stale response is never shown. Distinguishes loading / error / empty so a backend outage shows a
+ * retry instead of reading as "no species nearby".
  */
 
 import { useEffect, useState } from "react";
@@ -23,9 +24,16 @@ interface SpeciesResponse {
   species: NearbySpeciesItem[];
 }
 
+interface State {
+  key: string;
+  species: NearbySpeciesItem[] | null; // null while loading or after an error
+  error: string | null;
+}
+
 export function useNearbySpecies(lat: number, lon: number, notableOnly: boolean) {
   const key = `${lat},${lon},${notableOnly}`;
-  const [loaded, setLoaded] = useState<{ key: string; species: NearbySpeciesItem[] } | null>(null);
+  const [state, setState] = useState<State>({ key, species: null, error: null });
+  const [nonce, setNonce] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -34,14 +42,24 @@ export function useNearbySpecies(lat: number, lon: number, notableOnly: boolean)
       controller.signal,
     )
       .then((d) => {
-        if (!controller.signal.aborted) setLoaded({ key, species: d.species });
+        if (!controller.signal.aborted) setState({ key, species: d.species, error: null });
       })
-      .catch(() => {
-        if (!controller.signal.aborted) setLoaded({ key, species: [] });
+      .catch((e) => {
+        if (!controller.signal.aborted) {
+          setState({ key, species: null, error: e instanceof Error ? e.message : "Failed to load species" });
+        }
       });
     return () => controller.abort();
-  }, [lat, lon, notableOnly, key]);
+  }, [lat, lon, notableOnly, key, nonce]);
 
-  const current = loaded && loaded.key === key ? loaded : null;
-  return { species: current?.species ?? null };
+  // Until the effect resolves for the current key, state still holds the previous key -> treat as
+  // loading (so a key change shows the spinner, not stale data).
+  const current = state.key === key ? state : null;
+  const error = current?.error ?? null;
+  return {
+    species: current?.species ?? null,
+    loading: !current || (current.species === null && !error),
+    error,
+    reload: () => setNonce((n) => n + 1),
+  };
 }
