@@ -102,7 +102,8 @@ To run somewhere real (Fly.io, Railway, Render, a VM, ...):
    `RAPIDAPI_KEY`, `TOMTOM_API_KEY`, `WEATHER_USER_AGENT` (NWS requires a real contact string), and
    `ADMIN_TOKEN` (gates the ops endpoints; leave unset in prod to keep them disabled).
 4. The container runs `alembic upgrade head` on start, then `uvicorn` on `:8000`
-   (set `WEB_CONCURRENCY` for worker count). Point a health check at `/health`.
+   (set `WEB_CONCURRENCY` for worker count). Point a **liveness** check at `/health` (cheap, no
+   DB) and a **readiness** check at `/ready` (verifies Postgres answers; 503 when it doesn't).
 5. Seed the region once it's up, e.g. `docker compose exec app python -m app.seed_catalog`
    (needs `RAPIDAPI_KEY`), then run the per-region history backfill for wildlife seasonality.
 

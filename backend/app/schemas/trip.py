@@ -14,11 +14,17 @@ class TripBird(BaseModel):
     commonName: str
 
 
+# A downscaled thumbnail data-URL is a few tens of KB; cap it well above that but low enough that
+# a caller can't stuff a full-res image (or arbitrary payload) into the trip's JSON row.
+_MAX_THUMB_CHARS = 400_000  # ~300 KB of base64
+_MAX_PHOTOS_PER_TRIP = 12
+
+
 class TripPhoto(BaseModel):
     lat: float | None = None
     lon: float | None = None
     takenAt: str | None = None
-    thumb: str  # downscaled data-URL (the full image isn't stored)
+    thumb: str = Field(max_length=_MAX_THUMB_CHARS)  # downscaled data-URL (full image isn't stored)
 
 
 class TripCreate(BaseModel):
@@ -27,8 +33,8 @@ class TripCreate(BaseModel):
     difficulty: str | None = None
     miles: float | None = None
     riddenOn: date | None = None  # defaults to today on the server
-    birds: list[TripBird] = Field(default_factory=list)
-    photos: list[TripPhoto] = Field(default_factory=list)
+    birds: list[TripBird] = Field(default_factory=list, max_length=200)
+    photos: list[TripPhoto] = Field(default_factory=list, max_length=_MAX_PHOTOS_PER_TRIP)
 
 
 class TripOut(BaseModel):
