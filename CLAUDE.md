@@ -264,6 +264,14 @@ table is created (`spatial_index=True` is the default), including through Alembi
 `op.create_table`. An explicit `op.create_index(..., postgresql_using="gist")` on a geometry
 column will create a redundant duplicate index, not a missing one.
 
+But that auto index is on the **geometry** column, and the wildlife queries filter on the
+**geography** cast (`geom::geography` in `ST_DWithin`/`ST_Intersects`) - the planner can't use a
+geometry index for a geography predicate, so those spatial joins seq-scan `wildlife_sightings`
+(which grows unbounded) unless there's a matching **functional geography** GIST index. Migration
+`0012` adds `USING gist ((geom::geography))` on `wildlife_sightings` + `catalog_trails`; those are
+distinct from the auto geometry index, not redundant. If you add a new geography-cast spatial
+filter on a big table, index the cast expression the same way.
+
 ### Integration phasing - what's real vs. stubbed
 
 - **eBird** (`app/integrations/ebird.py`) and **weather/NWS** (`app/integrations/weather.py`)
