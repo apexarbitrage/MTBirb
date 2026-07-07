@@ -29,6 +29,8 @@ class TripPhoto(BaseModel):
 
 class TripCreate(BaseModel):
     trailExternalId: str | None = None
+    # Set when the ride was logged against a saved multi-trail route (trailExternalId stays null).
+    routeId: int | None = None
     trailName: str
     difficulty: str | None = None
     miles: float | None = None
@@ -40,6 +42,7 @@ class TripCreate(BaseModel):
 class TripOut(BaseModel):
     id: int
     trailExternalId: str | None
+    routeId: int | None
     trailName: str
     difficulty: str | None
     miles: float | None
@@ -54,6 +57,7 @@ class TripOut(BaseModel):
         return cls(
             id=t.id,
             trailExternalId=t.trail_external_id,
+            routeId=t.route_id,
             trailName=t.trail_name,
             difficulty=t.difficulty,
             miles=t.miles,

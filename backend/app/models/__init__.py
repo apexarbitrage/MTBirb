@@ -3,6 +3,7 @@ from app.models.ebird_taxon import EbirdTaxon
 from app.models.sighting import WildlifeSighting
 from app.models.trail import Trail
 from app.models.trail_photo import TrailPhoto
+from app.models.trail_route import TrailRoute
 from app.models.trip import Trip
 
-__all__ = ["CatalogTrail", "EbirdTaxon", "Trail", "TrailPhoto", "Trip", "WildlifeSighting"]
+__all__ = ["CatalogTrail", "EbirdTaxon", "Trail", "TrailPhoto", "TrailRoute", "Trip", "WildlifeSighting"]

@@ -13,7 +13,7 @@ import { shortSky } from "../data/useTrailWeather";
 import { useOptimalTime } from "../data/useOptimalTime";
 import { trailPhotoUrl, fmtTime, normalizeDifficulty } from "../data/trails";
 import { DifficultyMarker } from "../components/DifficultyMarker";
-import { CameraIcon, HeartIcon } from "../components/icons";
+import { CameraIcon, HeartIcon, RouteIcon } from "../components/icons";
 import { makeImageBlob } from "../data/photo";
 import { apiDelete, apiPostBlob } from "../api/client";
 import { useAppState } from "../state/AppState";
@@ -83,6 +83,7 @@ export function TrailDetailScreen() {
   const miles = trail.metricLengthMi ?? trail.lengthMi;
   const profile = trail.elevationProfile ?? [];
   const hasElevation = profile.length > 1;
+  const hasLine = !!linePoints && linePoints.length > 1;
   const { polyline, area } = elevationPaths(profile);
 
   // Your logged photos on this trail that carry GPS, for the map overlay.
@@ -253,6 +254,26 @@ export function TrailDetailScreen() {
               }}
             >
               <HeartIcon color={isFavorite(trail.id) ? "#fff" : "var(--terracotta)"} filled={isFavorite(trail.id)} size={21} />
+            </button>
+            <button
+              onClick={() => navigate("/route-builder")}
+              disabled={!hasLine}
+              aria-label="Build a route from this trail"
+              title={hasLine ? "Build a route from this trail" : "Needs a mapped trail line first"}
+              style={{
+                flex: "none",
+                width: 52,
+                borderRadius: 12,
+                border: "1.5px solid var(--terracotta)",
+                background: "var(--terracotta-tint)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: hasLine ? "pointer" : "default",
+                opacity: hasLine ? 1 : 0.4,
+              }}
+            >
+              <RouteIcon color="var(--terracotta)" size={21} />
             </button>
             <button
               onClick={() => setShowLog(true)}

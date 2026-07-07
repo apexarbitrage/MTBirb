@@ -10,7 +10,18 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.logging_config import configure_logging
 from app.observability import init_sentry
-from app.routers import birdnet, catalog, errors, health, map, sources, trails, trips, wildlife
+from app.routers import (
+    birdnet,
+    catalog,
+    errors,
+    health,
+    map,
+    sources,
+    trail_routes,
+    trails,
+    trips,
+    wildlife,
+)
 
 # Configure structured logging + optional Sentry before anything logs or the app is built.
 configure_logging()
@@ -64,6 +75,7 @@ api.include_router(trails.router)
 api.include_router(wildlife.router)
 api.include_router(sources.router)
 api.include_router(catalog.router)
+api.include_router(trail_routes.router)
 api.include_router(trips.router)
 api.include_router(birdnet.router)
 api.include_router(map.router)

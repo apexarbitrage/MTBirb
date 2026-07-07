@@ -1,0 +1,139 @@
+.screen {
+  height: 100%;
+  position: relative;
+  background: #26302a;
+  overflow: hidden;
+  color: var(--ink);
+}
+
+.map {
+  position: absolute;
+  inset: 0;
+  background: #2f3a30;
+}
+
+.topRow {
+  position: absolute;
+  top: 54px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.panel {
+  flex: 1;
+  min-width: 0;
+  background: rgba(45, 59, 45, 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-radius: 18px;
+  padding: 12px 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.panelLabel {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--sage-on-dark);
+}
+
+.panelStats {
+  font-size: 16px;
+  font-weight: 800;
+  color: #fff;
+  margin-top: 3px;
+}
+
+.panelSub {
+  font-size: 11px;
+  color: var(--text-on-forest-soft);
+  margin-top: 2px;
+}
+
+.pulse {
+  animation: builderPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes builderPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.bottomCard {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--sand);
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.25);
+  padding: 14px 18px calc(24px + env(safe-area-inset-bottom, 0px));
+}
+
+.chipRow {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.memberChip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 11px;
+  border-radius: 9px;
+  background: var(--forest);
+  color: var(--sand);
+  white-space: nowrap;
+}
+
+.chipNum {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.buttonRow {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.undoBtn {
+  flex: none;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--card-tile-divider);
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.saveBtn {
+  flex: 1;
+  padding: 12px 18px;
+  border-radius: 12px;
+  border: none;
+  background: var(--terracotta);
+  color: #fff;
+  font-weight: 800;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.saveBtn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}

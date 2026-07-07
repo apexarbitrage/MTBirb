@@ -37,16 +37,21 @@ export interface OptimalTime {
 }
 
 interface OptimalTimeResponse extends OptimalTime {
-  trail: string;
+  trail?: string;
+  route?: number;
 }
 
-export function useOptimalTime(slug: string | undefined) {
+/** `source: "route"` points the same curve at a saved multi-trail route
+ * (GET /api/trail-routes/{id}/optimal-time - identical response shape). */
+export function useOptimalTime(slug: string | undefined, source: "trail" | "route" = "trail") {
   const [loaded, setLoaded] = useState<{ slug: string; data: OptimalTime | null } | null>(null);
 
   useEffect(() => {
     if (!slug) return;
     const controller = new AbortController();
-    apiGet<OptimalTimeResponse>(`/catalog/trails/${slug}/optimal-time`, controller.signal)
+    const path =
+      source === "route" ? `/trail-routes/${slug}/optimal-time` : `/catalog/trails/${slug}/optimal-time`;
+    apiGet<OptimalTimeResponse>(path, controller.signal)
       .then((d) => {
         if (!controller.signal.aborted) setLoaded({ slug, data: d });
       })
@@ -54,7 +59,7 @@ export function useOptimalTime(slug: string | undefined) {
         if (!controller.signal.aborted) setLoaded({ slug, data: null });
       });
     return () => controller.abort();
-  }, [slug]);
+  }, [slug, source]);
 
   const data = loaded && loaded.slug === slug ? loaded.data : null;
   return { data, loading: !loaded || loaded.slug !== slug };

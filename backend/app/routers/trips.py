@@ -54,6 +54,7 @@ def list_trips(db: Session = Depends(get_db)) -> dict:
 def create_trip(body: TripCreate, db: Session = Depends(get_db)) -> TripOut:
     trip = Trip(
         trail_external_id=body.trailExternalId,
+        route_id=body.routeId,
         trail_name=body.trailName,
         difficulty=body.difficulty,
         miles=body.miles,

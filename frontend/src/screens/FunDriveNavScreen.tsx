@@ -47,9 +47,11 @@ function googleMapsUrl(
 export function FunDriveNavScreen() {
   const { location, byId } = useTrails();
   const { detailTrailId } = useAppState();
+  // byId only knows the nearby list - a trail reached via search or a saved route's start won't be
+  // in it, so the drive is fetched on the id directly and byId is just a nicer label when present.
   const trail = byId(detailTrailId);
   const { data, loading, unconfigured, error } = useDriveRoute(
-    trail ? detailTrailId : undefined,
+    detailTrailId || undefined,
     location.lat,
     location.lon,
   );
@@ -111,15 +113,18 @@ export function FunDriveNavScreen() {
     ? googleMapsUrl(data.origin, data.destination, style === "fun" ? data.fun.waypoints : undefined)
     : "#";
 
-  const overlay = !trail
-    ? { title: "Pick a trail first", detail: "Open a trail, then tap Navigate to the trailhead." }
-    : loading
-      ? { title: "Plotting the fun drive…", detail: null as string | null }
-      : unconfigured
-        ? { title: "Routing isn't set up", detail: "Set TOMTOM_API_KEY in backend/.env, then restart the API." }
-        : error || !data
-          ? { title: "Couldn't plot a drive", detail: "No driving route to this trailhead." }
-          : null;
+  const overlay = loading
+    ? { title: "Plotting the fun drive…", detail: null as string | null }
+    : unconfigured
+      ? { title: "Routing isn't set up", detail: "Set TOMTOM_API_KEY in backend/.env, then restart the API." }
+      : error || !data
+        ? {
+            title: "Couldn't plot a drive",
+            detail: trail
+              ? "No driving route to this trailhead."
+              : "Open a trail, then tap Navigate to the trailhead.",
+          }
+        : null;
 
   return (
     <div className={s.screen}>
@@ -183,7 +188,7 @@ export function FunDriveNavScreen() {
           <div className={s.etaRow}>
             <div>
               <div className={s.eta}>{fmtDur(leg.durationMin)}</div>
-              <div className={s.etaSub}>{leg.distanceMi} mi · to {trail?.name}</div>
+              <div className={s.etaSub}>{leg.distanceMi} mi · to {trail?.name ?? "the trailhead"}</div>
             </div>
             {style === "fun" && data.extraMin > 0 && (
               <div style={{ textAlign: "right" }}>

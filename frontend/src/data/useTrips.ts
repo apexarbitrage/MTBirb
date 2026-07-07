@@ -21,6 +21,7 @@ export interface TripPhoto {
 export interface Trip {
   id: number;
   trailExternalId: string | null;
+  routeId: number | null;
   trailName: string;
   difficulty: string | null;
   miles: number | null;
@@ -39,6 +40,7 @@ export interface TripStats {
 
 export interface LogRidePayload {
   trailExternalId?: string | null;
+  routeId?: number | null;
   trailName: string;
   difficulty?: string | null;
   miles?: number | null;

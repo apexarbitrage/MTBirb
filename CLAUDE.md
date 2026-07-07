@@ -261,6 +261,41 @@ line; that clears `elev_source` so metrics recompute. Name mismatches (TrailAPI 
 "Purisma" vs OSM "Purisima") defeat the name filter and fall back to a fragment - those get caught
 by the mapped-length guard above, not silently shown.
 
+### Multi-trail routes (TrailRoute) chain adjacent trails into one saved ride
+
+`trail_routes` (model `TrailRoute`, API `/trail-routes` - deliberately NOT named "route", which
+already means car routing in `drive_route.py`/`useDriveRoute.ts`) stores only a name + the
+**ordered member external_ids**; the combined line, summed stats, union species, and wildlife score
+are **recomputed from the member rows at read time** (`services/trail_routes.py`), so a route
+improves as its members' metrics refine. The chain rule: each added trail's OSM line must come
+within `_CHAIN_TOLERANCE_M` (100 m) of the chain built so far - one `ST_DWithin` geography
+predicate shared by the builder's candidate query (`lined_candidates`, backed by migration 0012's
+`line_geom::geography` index) and the create-time validation (`connects_to`), so the server can
+never reject a chain it offered. `GET /trail-routes/candidates` is the builder's single data
+source: members + tappable lined candidates, plus a *bounded* background line-enrichment kick
+(`pick_enrich_targets`, cap 8) for nearby un-lined trails - the module-level `_line_attempted` set
+stops the client's poll loop from re-hitting Overpass for trails whose line assembly already failed
+(nothing persists that failure). `concat_member_lines` orients each member's line to continue the
+chain (flipping segments, deduping joint vertices, letting <=100 m gaps become straight
+connectors) for the map, GPX export, and detail. Routes are global like trips (no accounts);
+`trips.route_id` (FK-less) links a logged ride to its route without coupling ride history to route
+deletion. Pure helpers are covered by `test_trail_routes.py`; the spatial queries need PostGIS and
+are verified live.
+
+The frontend flow: a route button on Trail detail (between ♥ and "Log this ride", disabled until
+the trail has a line) opens `RouteBuilderScreen` - the app's only *interactive tap-a-line* Leaflet
+map (members solid terracotta, candidates dashed sage with a fat transparent hit polyline so 4 px
+lines are tappable on a phone; `fitBounds` only on membership change so enrichment pop-ins don't
+yank the viewport). It polls `useRouteNeighbors` while `enrichingCount` drains (the
+`useCatalogDetail` poll pattern). Saved routes live in a **Trips-tab segment** (Trips | Routes,
+`AppState.tripsSegment`), and `RouteDetailScreen` (route `/route`, subject `AppState.detailRouteId`)
+reuses TrailDetailScreen's CSS module so a route reads as "a big trail": combined map (`TrailMap`
+unchanged), summed stats, union species, best-window card (`useOptimalTime(id, "route")` - the
+route subject travels via location *state* to `OptimalTimeScreen`, not AppState), GPX, log-ride
+(`LogRideSheet` takes `routeId` + a null trail id), and Navigate-to-start (sets `detailTrailId` to
+the first member; `FunDriveNavScreen` fetches by id directly rather than gating on the nearby-60
+`byId`, which also fixes navigation from searched trails).
+
 ### Geospatial query gotcha
 
 When querying against a `Trail.geom` or `WildlifeSighting.geom` from another row (e.g.
