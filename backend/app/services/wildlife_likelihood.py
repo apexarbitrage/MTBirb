@@ -282,6 +282,51 @@ def score_catalog_trails(
     return result
 
 
+# How many top species/notable names to keep in the stored (list-facing) score. The list overlay
+# only ever slices `[:3]`; a little margin covers any future widening without bloating the JSON.
+_STORED_TOP_N = 5
+
+
+def _score_to_json(info: dict) -> dict:
+    """Trim a per-trail score dict (from `score_catalog_trails`) to the JSON-serializable subset
+    the trail LIST overlay reads (`schemas.catalog._wildlife_fields`, with_factors=False), for
+    storage on the row. Drops the per-species weights and `last_observed` datetimes (not JSON, and
+    only the detail's factors use them - the detail still scores live), keeping the scores, counts,
+    and a few top species names."""
+
+    def _names(items: list[dict]) -> list[dict]:
+        return [
+            {"species_code": s["species_code"], "common_name": s["common_name"]}
+            for s in items[:_STORED_TOP_N]
+        ]
+
+    return {
+        "score": info["score"],
+        "notable_score": info["notable_score"],
+        "species_count": info["species_count"],
+        "notable_count": info["notable_count"],
+        "top_species": _names(info["top_species"]),
+        "top_notable": _names(info["top_notable"]),
+    }
+
+
+def refresh_catalog_scores(
+    db: Session, trails: list[CatalogTrail], buffer_m: float = 8000
+) -> None:
+    """(Re)compute the wildlife score for these catalog trails and persist the trimmed result on
+    each row's `wildlife_score`, so the trail list can read it as a plain column instead of running
+    the spatial join per request. Called after a wildlife sync/seed and lazily for a never-scored
+    row. Commits (so the stored scores survive). A trail with no nearby sightings stores a zero
+    score, not null - so it isn't treated as never-scored and re-refreshed every load."""
+    if not trails:
+        return
+    scores = score_catalog_trails(db, [t.id for t in trails], buffer_m=buffer_m)
+    for t in trails:
+        info = scores.get(t.id)
+        t.wildlife_score = _score_to_json(info) if info else None
+    db.commit()
+
+
 # How "recent" a sighting must be to count a species as currently present near you (the picker).
 _PRESENCE_DAYS = 30
 
