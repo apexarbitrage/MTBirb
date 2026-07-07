@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Date, DateTime, Float, String, func
+from sqlalchemy import JSON, Date, DateTime, Float, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -19,6 +19,9 @@ class Trip(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     trail_external_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    # The saved TrailRoute this ride was logged against, when it was a route (not a single trail).
+    # FK-less on purpose: deleting a route must not touch ride history (trail_name keeps the name).
+    route_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     trail_name: Mapped[str] = mapped_column(String(200))
     difficulty: Mapped[str | None] = mapped_column(String(40), nullable=True)
     miles: Mapped[float | None] = mapped_column(Float, nullable=True)

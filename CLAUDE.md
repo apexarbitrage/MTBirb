@@ -261,6 +261,27 @@ line; that clears `elev_source` so metrics recompute. Name mismatches (TrailAPI 
 "Purisma" vs OSM "Purisima") defeat the name filter and fall back to a fragment - those get caught
 by the mapped-length guard above, not silently shown.
 
+### Multi-trail routes (TrailRoute) chain adjacent trails into one saved ride
+
+`trail_routes` (model `TrailRoute`, API `/trail-routes` - deliberately NOT named "route", which
+already means car routing in `drive_route.py`/`useDriveRoute.ts`) stores only a name + the
+**ordered member external_ids**; the combined line, summed stats, union species, and wildlife score
+are **recomputed from the member rows at read time** (`services/trail_routes.py`), so a route
+improves as its members' metrics refine. The chain rule: each added trail's OSM line must come
+within `_CHAIN_TOLERANCE_M` (100 m) of the chain built so far - one `ST_DWithin` geography
+predicate shared by the builder's candidate query (`lined_candidates`, backed by migration 0012's
+`line_geom::geography` index) and the create-time validation (`connects_to`), so the server can
+never reject a chain it offered. `GET /trail-routes/candidates` is the builder's single data
+source: members + tappable lined candidates, plus a *bounded* background line-enrichment kick
+(`pick_enrich_targets`, cap 8) for nearby un-lined trails - the module-level `_line_attempted` set
+stops the client's poll loop from re-hitting Overpass for trails whose line assembly already failed
+(nothing persists that failure). `concat_member_lines` orients each member's line to continue the
+chain (flipping segments, deduping joint vertices, letting <=100 m gaps become straight
+connectors) for the map, GPX export, and detail. Routes are global like trips (no accounts);
+`trips.route_id` (FK-less) links a logged ride to its route without coupling ride history to route
+deletion. Pure helpers are covered by `test_trail_routes.py`; the spatial queries need PostGIS and
+are verified live.
+
 ### Geospatial query gotcha
 
 When querying against a `Trail.geom` or `WildlifeSighting.geom` from another row (e.g.
