@@ -13,6 +13,7 @@ import {
 
 type DiscoverSort = "wildlife" | "distance" | "effort" | "optimal";
 type Dir = "asc" | "desc";
+type TripsSegment = "trips" | "routes";
 
 interface AppState {
   // Discover
@@ -33,6 +34,13 @@ interface AppState {
   // Trail Detail / Optimal time subject
   detailTrailId: string;
   setDetailTrailId: (id: string) => void;
+
+  // Route Detail subject (a saved multi-trail route's id) + the Trips tab's active segment,
+  // so Back from a route detail restores the Routes list, not the Trips one.
+  detailRouteId: number | null;
+  setDetailRouteId: (id: number | null) => void;
+  tripsSegment: TripsSegment;
+  setTripsSegment: (seg: TripsSegment) => void;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -44,6 +52,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const [trailDir, setTrailDir] = useState<Dir>(TRAIL_SORT_DEFAULT_DIR.sighting);
   const [speciesFilter, setSpeciesFilter] = useState<{ code: string; name: string } | null>(null);
   const [detailTrailId, setDetailTrailId] = useState("raptor");
+  const [detailRouteId, setDetailRouteId] = useState<number | null>(null);
+  const [tripsSegment, setTripsSegment] = useState<TripsSegment>("trips");
 
   const value = useMemo<AppState>(
     () => ({
@@ -75,8 +85,12 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       setSpeciesFilter,
       detailTrailId,
       setDetailTrailId,
+      detailRouteId,
+      setDetailRouteId,
+      tripsSegment,
+      setTripsSegment,
     }),
-    [discoverSelectedId, discoverSort, trailSort, trailDir, speciesFilter, detailTrailId],
+    [discoverSelectedId, discoverSort, trailSort, trailDir, speciesFilter, detailTrailId, detailRouteId, tripsSegment],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -21,6 +21,22 @@ export function HeartIcon({ color, size = 20, filled = false }: NavIconProps & {
   );
 }
 
+export function RouteIcon({ color, size = 20 }: NavIconProps) {
+  // A chained path between two endpoints: the "link trails into a route" affordance.
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      style={{ display: "block", fill: "none", stroke: color, strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" }}
+    >
+      <circle cx="6" cy="18.5" r="2.4" />
+      <circle cx="18" cy="5.5" r="2.4" />
+      <path d="M8.2 17.2c3.4-1.6 2.4-4.4.6-5.6-2-1.4-2.4-3.8 1-4.9 2.6-.9 4.6-.4 6 .9" />
+    </svg>
+  );
+}
+
 export function CameraIcon({ color, size = 18 }: NavIconProps) {
   return (
     <svg

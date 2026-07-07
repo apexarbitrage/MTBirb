@@ -9,7 +9,10 @@ interface SpeciesOption {
 }
 
 interface Props {
-  trail: { id: string; name: string; difficulty: string | null; miles: number | null };
+  /** id is null when the ride is logged against a saved route rather than one trail. */
+  trail: { id: string | null; name: string; difficulty: string | null; miles: number | null };
+  /** Set when logging a ride on a saved multi-trail route. */
+  routeId?: number;
   /** Candidate species to check off (the trail's likely/notable/recent eBird birds). */
   options: SpeciesOption[];
   onClose: () => void;
@@ -19,7 +22,7 @@ interface Props {
 const today = () => new Date().toISOString().slice(0, 10);
 
 /** A bottom sheet to log a ride: pick a date, check off the birds you saw, add your own. */
-export function LogRideSheet({ trail, options, onClose, onLogged }: Props) {
+export function LogRideSheet({ trail, routeId, options, onClose, onLogged }: Props) {
   // De-dupe the candidate species by name (likely/notable are name-only; recent carry a code).
   const candidates = useMemo(() => {
     const byName = new Map<string, SpeciesOption>();
@@ -93,6 +96,7 @@ export function LogRideSheet({ trail, options, onClose, onLogged }: Props) {
     try {
       await logRide({
         trailExternalId: trail.id,
+        routeId,
         trailName: trail.name,
         difficulty: trail.difficulty,
         miles: trail.miles,

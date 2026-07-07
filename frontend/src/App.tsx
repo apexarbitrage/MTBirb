@@ -6,6 +6,8 @@ import { TrailsScreen } from "./screens/TrailsScreen";
 import { TripsScreen } from "./screens/TripsScreen";
 import { YouScreen } from "./screens/YouScreen";
 import { TrailDetailScreen } from "./screens/TrailDetailScreen";
+import { RouteBuilderScreen } from "./screens/RouteBuilderScreen";
+import { RouteDetailScreen } from "./screens/RouteDetailScreen";
 import { OptimalTimeScreen } from "./screens/OptimalTimeScreen";
 import { FunDriveNavScreen } from "./screens/FunDriveNavScreen";
 import { BirdIdScreen } from "./screens/BirdIdScreen";
@@ -39,6 +41,8 @@ export function App() {
         <Route path="/you" element={<YouScreen />} />
         {/* Flow screens */}
         <Route path="/trail" element={<TrailDetailScreen />} />
+        <Route path="/route-builder" element={<RouteBuilderScreen />} />
+        <Route path="/route" element={<RouteDetailScreen />} />
         <Route path="/optimal-time" element={<OptimalTimeScreen />} />
         <Route path="/navigate" element={<FunDriveNavScreen />} />
         <Route path="/bird-id" element={<BirdIdScreen />} />

@@ -1,3 +1,4 @@
+import { useLocation } from "react-router-dom";
 import { BackButton } from "../components/BackButton";
 import { CenterMessage } from "../components/CenterMessage";
 import { useTrails } from "../data/TrailsProvider";
@@ -104,10 +105,17 @@ function dayLabel(isoDate: string | null): string {
 export function OptimalTimeScreen() {
   const { byId, loading, error, reload } = useTrails();
   const { detailTrailId } = useAppState();
+  // When opened from a saved route's detail, the subject rides in per-navigation location state
+  // (not AppState), so the trail entry points need no changes and nothing goes stale.
+  const routeSubject = (useLocation().state as { route?: { id: number; name: string } } | null)
+    ?.route;
   const t = byId(detailTrailId);
-  const { data: opt, loading: optLoading } = useOptimalTime(t ? detailTrailId : undefined);
+  const { data: opt, loading: optLoading } = useOptimalTime(
+    routeSubject ? String(routeSubject.id) : t ? detailTrailId : undefined,
+    routeSubject ? "route" : "trail",
+  );
 
-  if (loading || error || !t) {
+  if (!routeSubject && (loading || error || !t)) {
     return (
       <div className={common.screen}>
         <div style={{ position: "absolute", top: 16, left: 16, zIndex: 2 }}>
@@ -130,12 +138,12 @@ export function OptimalTimeScreen() {
   const bandLeft = (curve.bestStart / total) * 100;
   const bandWidth = (curve.bestCount / total) * 100;
 
-  const recWindow = live?.bestWindow ?? t.bestWindow ?? "Dawn & dusk";
+  const recWindow = live?.bestWindow ?? t?.bestWindow ?? "Dawn & dusk";
   const recWhy =
     live?.bestWindowWhy ??
     (optLoading
       ? "Reading the hourly forecast…"
-      : (t.bestWindowWhy ??
+      : (t?.bestWindowWhy ??
         "A live hourly-weather forecast isn't available here, so the curve below is illustrative."));
 
   return (
@@ -145,7 +153,7 @@ export function OptimalTimeScreen() {
           <BackButton bg="rgba(45,59,45,0.1)" stroke="var(--forest)" blur={false} />
         </div>
         <div className={common.eyebrow}>
-          {t.name} · {dayLabel(live?.date ?? null)}
+          {routeSubject?.name ?? t?.name} · {dayLabel(live?.date ?? null)}
         </div>
         <div className={common.title}>Best time to ride</div>
 

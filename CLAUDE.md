@@ -282,6 +282,20 @@ connectors) for the map, GPX export, and detail. Routes are global like trips (n
 deletion. Pure helpers are covered by `test_trail_routes.py`; the spatial queries need PostGIS and
 are verified live.
 
+The frontend flow: a route button on Trail detail (between ♥ and "Log this ride", disabled until
+the trail has a line) opens `RouteBuilderScreen` - the app's only *interactive tap-a-line* Leaflet
+map (members solid terracotta, candidates dashed sage with a fat transparent hit polyline so 4 px
+lines are tappable on a phone; `fitBounds` only on membership change so enrichment pop-ins don't
+yank the viewport). It polls `useRouteNeighbors` while `enrichingCount` drains (the
+`useCatalogDetail` poll pattern). Saved routes live in a **Trips-tab segment** (Trips | Routes,
+`AppState.tripsSegment`), and `RouteDetailScreen` (route `/route`, subject `AppState.detailRouteId`)
+reuses TrailDetailScreen's CSS module so a route reads as "a big trail": combined map (`TrailMap`
+unchanged), summed stats, union species, best-window card (`useOptimalTime(id, "route")` - the
+route subject travels via location *state* to `OptimalTimeScreen`, not AppState), GPX, log-ride
+(`LogRideSheet` takes `routeId` + a null trail id), and Navigate-to-start (sets `detailTrailId` to
+the first member; `FunDriveNavScreen` fetches by id directly rather than gating on the nearby-60
+`byId`, which also fixes navigation from searched trails).
+
 ### Geospatial query gotcha
 
 When querying against a `Trail.geom` or `WildlifeSighting.geom` from another row (e.g.
