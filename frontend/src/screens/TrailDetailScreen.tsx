@@ -51,7 +51,7 @@ const surfaceChip: CSSProperties = {
 export function TrailDetailScreen() {
   const navigate = useNavigate();
   const { detailTrailId, setDetailTrailId, setSpeciesFilter } = useAppState();
-  const { trail, linePoints, error, loading, species, areaRadiusKm, weather } =
+  const { trail, linePoints, error, loading, enriching, species, areaRadiusKm, weather } =
     useCatalogDetail(detailTrailId);
   const { trips } = useTrips();
   const { data: optimal } = useOptimalTime(detailTrailId);
@@ -358,6 +358,31 @@ export function TrailDetailScreen() {
                 </span>
               </div>
               <TrailMap line={linePoints} photos={myPhotos} height={220} />
+            </div>
+          )}
+
+          {/* While the OSM line + terrain warm in the background, hold the space so it's clearly
+              "loading", not "this trail has no map". */}
+          {enriching && !(linePoints && linePoints.length > 1) && (
+            <div className={s.elevCard}>
+              <div className={s.elevHead}>
+                <span style={{ color: "var(--sage)" }}>TRAIL MAP</span>
+                <span style={{ color: "var(--text-placeholder)" }}>loading…</span>
+              </div>
+              <div
+                style={{
+                  height: 220,
+                  borderRadius: 12,
+                  background: "var(--sage-tint)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--text-muted)",
+                  fontSize: 13,
+                }}
+              >
+                Loading map &amp; terrain…
+              </div>
             </div>
           )}
 

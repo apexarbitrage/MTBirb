@@ -15,6 +15,8 @@ type LinePoint = [number, number];
 interface DetailResponse {
   trail: CatalogTrail;
   linePoints: LinePoint[] | null;
+  // The backend warms the OSM line + USGS terrain in the background; true until they've landed.
+  enriching?: boolean;
 }
 interface WildlifeResponse {
   syncedNow: number;
@@ -30,6 +32,7 @@ export function useCatalogDetail(id: string) {
     key: string;
     trail: CatalogTrail | null;
     linePoints: LinePoint[] | null;
+    enriching: boolean;
     error: string | null;
   } | null>(null);
   const [wildlife, setWildlife] = useState<{
@@ -41,20 +44,37 @@ export function useCatalogDetail(id: string) {
 
   useEffect(() => {
     const c = new AbortController();
-    apiGet<DetailResponse>(`/catalog/trails/${id}`, c.signal)
-      .then((d) => {
-        if (!c.signal.aborted)
-          setDetail({ key: id, trail: d.trail, linePoints: d.linePoints, error: null });
-      })
-      .catch((e) => {
-        if (!c.signal.aborted)
-          setDetail({
-            key: id,
-            trail: null,
-            linePoints: null,
-            error: e instanceof Error ? e.message : "Failed to load trail",
-          });
-      });
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    // The detail returns fast with whatever's cached; if the backend is still warming the line +
+    // terrain, poll a few times so the map and elevation fill in without blocking the screen.
+    const loadDetail = () => {
+      apiGet<DetailResponse>(`/catalog/trails/${id}`, c.signal)
+        .then((d) => {
+          if (c.signal.aborted) return;
+          // Keep polling only while there's budget left; once it's spent, drop `enriching` so a
+          // trail that can't be lined stops showing a "loading" placeholder forever.
+          const stillTrying = !!d.enriching && attempts < 6;
+          setDetail({ key: id, trail: d.trail, linePoints: d.linePoints, enriching: stillTrying, error: null });
+          if (stillTrying) {
+            attempts += 1;
+            timer = setTimeout(loadDetail, 2500);
+          }
+        })
+        .catch((e) => {
+          if (!c.signal.aborted)
+            setDetail({
+              key: id,
+              trail: null,
+              linePoints: null,
+              enriching: false,
+              error: e instanceof Error ? e.message : "Failed to load trail",
+            });
+        });
+    };
+    loadDetail();
+
     apiGet<WildlifeResponse>(`/catalog/trails/${id}/wildlife`, c.signal)
       .then((d) => {
         if (!c.signal.aborted)
@@ -70,7 +90,10 @@ export function useCatalogDetail(id: string) {
       .catch(() => {
         if (!c.signal.aborted) setWeather({ key: id, current: null });
       });
-    return () => c.abort();
+    return () => {
+      c.abort();
+      if (timer) clearTimeout(timer);
+    };
   }, [id]);
 
   const d = detail && detail.key === id ? detail : null;
@@ -82,6 +105,7 @@ export function useCatalogDetail(id: string) {
     linePoints: d?.linePoints ?? null,
     error: d?.error ?? null,
     loading: d === null,
+    enriching: d?.enriching ?? false,
     species: w?.species ?? null,
     areaRadiusKm: w?.areaRadiusKm ?? null,
     weather: wx?.current ?? null,
