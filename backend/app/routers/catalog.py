@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.media import sniff_image
 from app.security import require_admin
 from app.integrations.elevation import OpenMeteoElevation, UsgsElevation
@@ -79,6 +79,45 @@ def _get_catalog_or_404(db: Session, external_id: str) -> CatalogTrail:
     if trail is None:
         raise HTTPException(status_code=404, detail="catalog trail not found")
     return trail
+
+
+# external_ids with an in-flight background enrichment, so we don't stack duplicate Overpass/USGS
+# work when the detail is re-fetched while the first pass is still running.
+_enriching_trails: set[str] = set()
+
+
+def _needs_enrichment(trail: CatalogTrail) -> bool:
+    """Whether the trail still needs its OSM line and/or the high-res USGS metrics warmed. `usgs`
+    and `too-short` are terminal (nothing more to compute); a missing line or a coarse/absent
+    metric source means there's still enrichment to do."""
+    return trail.line_geom is None or trail.elev_source not in ("usgs", "too-short")
+
+
+async def _enrich_trail_background(external_id: str) -> None:
+    """Assemble the OSM line + refine USGS elevation off the request path, in its own session
+    (ensure_line / ensure_metrics commit their own writes). Fire-and-forget: the detail response
+    already went out, and the client polls for the enriched line/metrics."""
+    if external_id in _enriching_trails:
+        return
+    _enriching_trails.add(external_id)
+    try:
+        db = SessionLocal()
+        try:
+            trail = db.scalar(select(CatalogTrail).where(CatalogTrail.external_id == external_id))
+            if trail is None:
+                return
+            try:
+                await ensure_line(db, trail)
+            except Exception:  # noqa: BLE001 - a line is a nice-to-have
+                logger.warning("background ensure_line failed for %s", external_id, exc_info=True)
+            try:
+                await ensure_metrics(db, trail, UsgsElevation())
+            except Exception:  # noqa: BLE001 - keep any existing metrics on DEM failure
+                logger.warning("background ensure_metrics failed for %s", external_id, exc_info=True)
+        finally:
+            db.close()
+    finally:
+        _enriching_trails.discard(external_id)
 
 
 @router.get("/trails")
@@ -235,17 +274,14 @@ async def search_trails(
 
 @router.get("/trails/{external_id}")
 async def get_catalog_trail(external_id: str, db: Session = Depends(get_db)) -> dict:
-    """A catalog trail's detail. Fetches its OSM line on demand, then refines its terrain
-    metrics to the higher-resolution USGS 3DEP DEM (the initial pass uses Open-Meteo)."""
+    """A catalog trail's detail. The OSM-line assembly (Overpass) + USGS DEM refinement are slow
+    the first time a trail is opened, so they run in the *background* rather than blocking the
+    screen: the response returns immediately with whatever's cached and `enriching:true`, and the
+    client re-fetches to pick up the line + terrain once they land."""
     trail = _get_catalog_or_404(db, external_id)
-    try:
-        await ensure_line(db, trail)
-    except Exception:  # noqa: BLE001 - a line is a nice-to-have; never fail the detail on it
-        pass
-    try:
-        await ensure_metrics(db, trail, UsgsElevation())
-    except Exception:  # noqa: BLE001 - keep any existing (Open-Meteo) metrics on DEM failure
-        pass
+    enriching = _needs_enrichment(trail)
+    if enriching:
+        asyncio.create_task(_enrich_trail_background(external_id))
     score = score_catalog_trails(db, [trail.id], buffer_m=_AREA_BUFFER_M).get(trail.id)
     photo = get_photo(db, external_id)
     return {
@@ -253,6 +289,7 @@ async def get_catalog_trail(external_id: str, db: Session = Depends(get_db)) -> 
             trail, score, with_factors=True, photo_version=photo_version(photo.updated_at if photo else None)
         ),
         "linePoints": line_points(db, trail.id),
+        "enriching": enriching,
     }
 
 
