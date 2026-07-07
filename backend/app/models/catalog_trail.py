@@ -2,6 +2,7 @@ from datetime import datetime
 
 from geoalchemy2 import Geometry
 from sqlalchemy import JSON, DateTime, Float, Integer, String, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -60,4 +61,8 @@ class CatalogTrail(Base):
     # OSM way tags, aggregated when the line is matched (services/catalog_geometry.py):
     surface: Mapped[str | None] = mapped_column(String(40), nullable=True)
     mtb_scale: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # Precomputed wildlife overlay (trimmed score dict), so the trail LIST reads it as a column
+    # instead of running the spatial join per request. Refreshed on sync/seed and lazily for a
+    # never-scored row; null until first scored. See services/wildlife_likelihood.py.
+    wildlife_score: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

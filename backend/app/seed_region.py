@@ -6,9 +6,12 @@ front: TrailAPI trails and eBird sightings (recent + notable) per cell, then a p
 seasonality backfill. Cells that are already populated are skipped, so a run is resumable and
 re-running is cheap (important because the TrailAPI free tier is rate-limited).
 
+After the caches are primed it precomputes each trail's wildlife score onto the row, so browsing
+the region's trail list does no spatial work per request (the list just reads the column).
+
 Trail geometry (OSM) and elevation metrics are intentionally NOT seeded here - they load lazily
 when a trail's detail opens, and bulk Overpass sweeps risk getting the server IP banned. This
-script only needs what makes the *list* fast: trails + wildlife + seasonality.
+script only needs what makes the *list* fast: trails + wildlife + seasonality + scores.
 
 Run in the container, e.g.:
     docker compose exec app python -m app.seed_region --all
@@ -25,9 +28,13 @@ import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from sqlalchemy import select
+
 from app.config import get_settings
 from app.db import SessionLocal
+from app.models import CatalogTrail
 from app.services.trail_catalog import cache_trails_near, count_nearby, sightings_near_count
+from app.services.wildlife_likelihood import refresh_catalog_scores
 from app.services.wildlife_sync import (
     backfill_region_history,
     sync_notable_observations,
@@ -41,6 +48,28 @@ _TRAIL_RADIUS_MI = 25
 # trails _MIN_CACHED=8, sightings _MIN_SIGHTINGS=20).
 _TRAIL_SKIP_AT = 8
 _WILDLIFE_SKIP_AT = 20
+# Trails per batch when precomputing scores, to bound each spatial join's IN-list.
+_SCORE_BATCH = 200
+
+
+def _refresh_region_scores(db, region: "Region") -> int:
+    """Precompute + store each region trail's wildlife score so the list reads it as a column
+    (no per-request spatial join). Runs after wildlife + seasonality are cached, so it scores
+    against the full local history. Returns the number of trails scored."""
+    (lat0, lat1), (lon0, lon1) = region.lat_range, region.lon_range
+    trails = list(
+        db.scalars(
+            select(CatalogTrail).where(
+                CatalogTrail.lat >= lat0,
+                CatalogTrail.lat <= lat1,
+                CatalogTrail.lon >= lon0,
+                CatalogTrail.lon <= lon1,
+            )
+        )
+    )
+    for i in range(0, len(trails), _SCORE_BATCH):
+        refresh_catalog_scores(db, trails[i : i + _SCORE_BATCH])
+    return len(trails)
 
 
 @dataclass(frozen=True)
@@ -81,6 +110,7 @@ async def seed_region(
     do_trails: bool = True,
     do_wildlife: bool = True,
     do_seasonality: bool = True,
+    do_scores: bool = True,
     step: float | None = None,
     max_trail_calls: int | None = None,
 ) -> None:
@@ -136,6 +166,15 @@ async def seed_region(
                     print(f"  seasonality {code} ({year}): {summary}")
                 except Exception as exc:  # noqa: BLE001
                     print(f"  seasonality {code}: error {exc}")
+
+        # Precompute the wildlife score onto each row last, once the full local cache is in place,
+        # so browsing the region's trail list does zero spatial work per request.
+        if do_scores:
+            try:
+                scored = _refresh_region_scores(db, region)
+                print(f"  scores: refreshed {scored} trails")
+            except Exception as exc:  # noqa: BLE001
+                print(f"  scores: error {exc}")
     finally:
         db.close()
     print(f"== {region.label} done: +{trails_added} trails, +{sightings_added} sightings "
@@ -156,6 +195,7 @@ async def _run(args: argparse.Namespace) -> None:
             do_trails=not args.no_trails,
             do_wildlife=not args.no_wildlife,
             do_seasonality=not args.no_seasonality,
+            do_scores=not args.no_scores,
             step=args.step,
             max_trail_calls=args.max_trail_calls,
         )
@@ -171,6 +211,7 @@ def main() -> None:
     p.add_argument("--no-trails", action="store_true", help="skip TrailAPI trail seeding")
     p.add_argument("--no-wildlife", action="store_true", help="skip eBird sighting seeding")
     p.add_argument("--no-seasonality", action="store_true", help="skip the seasonality backfill")
+    p.add_argument("--no-scores", action="store_true", help="skip precomputing the wildlife scores")
     args = p.parse_args()
     if not args.regions and not args.all:
         p.error("name at least one region, or pass --all")

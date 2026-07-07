@@ -175,6 +175,20 @@ not a calibrated probability: it does not yet weight by eBird search effort (che
 time of day, and the historic sampling is coarse (one day/month under-detects month presence).
 Treat this model as the area still maturing - the highest-value place to keep deepening.
 
+The **trail list doesn't score live** - that spatial join per request got slow as the sightings
+cache grew (even with migration 0012's geography index). Instead the trimmed score dict is
+**precomputed onto the row** (`CatalogTrail.wildlife_score`, JSONB, migration 0013):
+`refresh_catalog_scores` runs `score_catalog_trails`, trims it with `_score_to_json` (drops the
+per-species weights + `last_observed` datetimes, keeps the scores/counts and the top few species
+names the list needs), and stores it. The seeder (`seed_region.py`) refreshes a whole region's rows
+after wildlife/seasonality land, and `GET /catalog/trails` refreshes lazily - all visible trails when
+it just synced new sightings, else only never-scored (`wildlife_score is None`) rows - so the hot
+path is a plain column read. An empty area stores a **zero** score (not null) so it isn't re-scored
+every load. Only the **list** reads the stored value; the **detail** still scores live (it needs the
+factors' `last_observed`, `with_factors=True`), as do search and the optimal-now sort. If you change
+what the list overlay derives, update `_score_to_json` to keep storing that field (guarded by
+`test_wildlife_precompute.py`).
+
 ### The optimal-ride-time model blends live weather with a wildlife-activity prior
 
 `app/services/optimal_ride_time.py` scores the best time-of-day to ride a trail. For each upcoming

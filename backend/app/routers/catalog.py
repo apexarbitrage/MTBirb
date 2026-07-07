@@ -51,6 +51,7 @@ from app.services.trail_photos import (
     versions_for,
 )
 from app.services.wildlife_likelihood import (
+    refresh_catalog_scores,
     score_catalog_trails,
     score_species_for_trails,
     species_near,
@@ -161,14 +162,21 @@ async def list_catalog_trails(
 
     trails = nearby_trails(db, lat, lon, radius_km, limit)
     ids = [t.id for t in trails]
-    scores = score_catalog_trails(db, ids, buffer_m=_AREA_BUFFER_M)
-    # When targeting one species, also score each trail by that species' odds and rank by it.
+    # The wildlife overlay is precomputed onto the row (refresh_catalog_scores, run on sync/seed),
+    # so the list is a plain column read - no per-request spatial join on the hot path. Refresh only
+    # when needed: if we just synced new sightings, re-score the visible trails so fresh reports show
+    # immediately; otherwise fill in any row that's never been scored.
+    stale = trails if synced_now else [t for t in trails if t.wildlife_score is None]
+    if stale:
+        refresh_catalog_scores(db, stale, buffer_m=_AREA_BUFFER_M)
+    # When targeting one species, also score each trail by that species' odds and rank by it. This
+    # stays live (it's per-species and can't be precomputed for an arbitrary species).
     sp = score_species_for_trails(db, ids, species) if species else {}
     versions = versions_for(db, [t.external_id for t in trails])
     out = [
         CatalogTrailOut.from_model(
             t,
-            scores.get(t.id),
+            t.wildlife_score,
             species_likelihood=sp.get(t.id, {}).get("likelihood") if species else None,
             photo_version=versions.get(t.external_id),
         )
