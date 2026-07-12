@@ -88,8 +88,10 @@ def _point_geog(lat: float, lon: float):
     return func.cast(func.ST_SetSRID(func.ST_MakePoint(lon, lat), 4326), Geography)
 
 
-def count_nearby(db: Session, lat: float, lon: float, radius_km: float) -> int:
-    return db.scalar(
+def count_nearby(db: Session, lat: float, lon: float, radius_km: float, source: str | None = None) -> int:
+    """Cached catalog trails within radius_km of a point, optionally from one source only
+    (e.g. source="osm" gates the OSM discovery pass)."""
+    stmt = (
         select(func.count())
         .select_from(CatalogTrail)
         .where(
@@ -97,7 +99,10 @@ def count_nearby(db: Session, lat: float, lon: float, radius_km: float) -> int:
                 func.cast(CatalogTrail.geom, Geography), _point_geog(lat, lon), radius_km * 1000
             )
         )
-    ) or 0
+    )
+    if source is not None:
+        stmt = stmt.where(CatalogTrail.source == source)
+    return db.scalar(stmt) or 0
 
 
 def nearby_trails(

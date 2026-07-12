@@ -24,6 +24,12 @@ from app.integrations.weather import WeatherClient
 from app.models import CatalogTrail
 from app.schemas.catalog import CatalogTrailOut
 from app.services.catalog_geometry import ensure_line, enrich_region
+from app.services.osm_discovery import (
+    _DISCOVERY_RADIUS_KM,
+    _MIN_OSM_NEARBY,
+    discover_grid,
+    discover_trails,
+)
 from app.services.drive_route import curviness, sample_waypoints
 from app.services.gpx import build_gpx, slugify
 from app.services.optimal_ride_time import (
@@ -86,6 +92,33 @@ def _get_catalog_or_404(db: Session, external_id: str) -> CatalogTrail:
 # work when the detail is re-fetched while the first pass is still running.
 _enriching_trails: set[str] = set()
 
+# 0.1-degree (~11 km) cells where OSM trail discovery has been attempted this process. An area
+# with no discoverable trails persists nothing, so without this every browse of it would re-hit
+# Overpass - same rationale as trail_routes' _line_attempted. Bound: <=1 Overpass discovery call
+# per cell per process lifetime, success or failure.
+_osm_cells_attempted: set[tuple[int, int]] = set()
+
+
+def _osm_cell(lat: float, lon: float) -> tuple[int, int]:
+    return (round(lat * 10), round(lon * 10))
+
+
+async def _discover_osm_background(lat: float, lon: float) -> None:
+    """Discover OSM trails around a browsed point off the request path, in its own session.
+    Fire-and-forget: the trail list already went out; discovered rows show on the next load."""
+    db = SessionLocal()
+    try:
+        result = await discover_trails(db, lat, lon)
+        if result["added"] or result["donated"]:
+            logger.info(
+                "OSM discovery near (%.3f, %.3f): +%d trails, %d lines donated",
+                lat, lon, result["added"], result["donated"],
+            )
+    except Exception:  # noqa: BLE001 - discovery is a bonus; the cell stays marked attempted
+        logger.warning("background OSM discovery failed near (%.3f, %.3f)", lat, lon, exc_info=True)
+    finally:
+        db.close()
+
 
 def _needs_enrichment(trail: CatalogTrail) -> bool:
     """Whether the trail still needs its OSM line and/or the high-res USGS metrics warmed. `usgs`
@@ -141,6 +174,19 @@ async def list_catalog_trails(
             fetched_now = await cache_trails_near(db, lat, lon, radius=min(int(radius_km * 0.62) + 1, 100))
     except Exception:  # noqa: BLE001 - cache warming is best-effort
         logger.warning("opportunistic TrailAPI cache failed; serving cached trails", exc_info=True)
+
+    # Complement TrailAPI with OSM-discovered trails when this area has few of them - in the
+    # background (one bounded Overpass call, never on the hot path), at most once per ~11 km cell
+    # per process. Discovered rows arrive with lines and show on the next load.
+    try:
+        cell = _osm_cell(lat, lon)
+        if cell not in _osm_cells_attempted:
+            # Mark before kicking the task so concurrent requests can't race a duplicate call.
+            _osm_cells_attempted.add(cell)
+            if count_nearby(db, lat, lon, _DISCOVERY_RADIUS_KM, source="osm") < _MIN_OSM_NEARBY:
+                asyncio.create_task(_discover_osm_background(lat, lon))
+    except Exception:  # noqa: BLE001 - discovery is a bonus; never fail the list on it
+        logger.warning("OSM discovery kick failed", exc_info=True)
 
     # The wildlife score reads cached sightings; sync the area once if it's sparse so a
     # newly-browsed region isn't scored against an empty cache. Both feeds: the common-species
@@ -565,6 +611,21 @@ async def enrich_geometry(
     """Batch-match OSM lines for catalog trails in a bbox (one Overpass call per trail).
     `force` re-assembles existing lines too (to upgrade older single-way fragments)."""
     return await enrich_region(db, (south, north), (west, east), max_calls=max_calls, force=force)
+
+
+@router.post("/discover-osm", dependencies=[Depends(require_admin)])
+async def discover_osm(
+    south: float = Query(...),
+    west: float = Query(...),
+    north: float = Query(...),
+    east: float = Query(...),
+    max_calls: int = Query(20, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Discover named OSM MTB trails as catalog rows across a bbox: one Overpass call per ~16 km
+    cell, 1s pacing, cells with OSM coverage skipped - so re-runs are cheap and resumable. Rows
+    arrive with their line geometry set (no later per-trail assembly)."""
+    return await discover_grid(db, (south, north), (west, east), max_calls=max_calls)
 
 
 @router.post("/compute-metrics", dependencies=[Depends(require_admin)])

@@ -21,6 +21,15 @@ _QUERY_TEMPLATE = """[out:json][timeout:{timeout}];
 );
 out geom;"""
 
+# Discovery variant: only *named* ridable ways. Catalog discovery (services/osm_discovery.py) only
+# keeps named trails, and in a dense bbox the unnamed majority (social tracks, driveways) dominates
+# the response bytes just to be dropped client-side - filtering server-side keeps calls small.
+_NAMED_ONLY_QUERY_TEMPLATE = """[out:json][timeout:{timeout}];
+(
+  way["highway"~"^(path|cycleway|track|bridleway)$"]["bicycle"!="no"]["name"]({south},{west},{north},{east});
+);
+out geom;"""
+
 # Name-filtered variant: pulls every way carrying a given name (case-insensitive regex) across a
 # wide bbox, so a trail split into many OSM ways can be reassembled. footway is included here
 # (named trails are sometimes tagged footway) but still excludes bicycle=no.
@@ -36,12 +45,20 @@ class OverpassClient:
         self._url = url
 
     async def fetch_ways(
-        self, south: float, west: float, north: float, east: float, timeout: int = 25
+        self,
+        south: float,
+        west: float,
+        north: float,
+        east: float,
+        timeout: int = 25,
+        named_only: bool = False,
     ) -> list[dict]:
-        """Ridable OSM ways in a bbox, each with name, tags, and (lon, lat) geometry points."""
-        query = _QUERY_TEMPLATE.format(
-            timeout=timeout, south=south, west=west, north=north, east=east
-        )
+        """Ridable OSM ways in a bbox, each with name, tags, and (lon, lat) geometry points.
+
+        `named_only` filters to ways carrying a name tag server-side (catalog discovery keeps
+        only named trails, and unnamed ways dominate a dense bbox's response size)."""
+        template = _NAMED_ONLY_QUERY_TEMPLATE if named_only else _QUERY_TEMPLATE
+        query = template.format(timeout=timeout, south=south, west=west, north=north, east=east)
         return await self._run(query, timeout)
 
     async def fetch_named_ways(

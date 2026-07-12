@@ -249,6 +249,25 @@ a blocking Overpass call on every detail open; use `enrich-geometry?force=true` 
 surface for already-lined trails. All of these surface on the Trail-detail terrain card and feed the
 optimal-now sort's per-trail drainage (see `per_trail_surface_factor` below).
 
+### OSM discovery complements the sparse TrailAPI catalog (osm_discovery.py)
+
+TrailAPI often has just a trailhead point and none of the surrounding network, so
+`services/osm_discovery.py` discovers trails straight from Overpass: **one named-only bbox call**
+(`fetch_ways(named_only=True)`, 16 km square), same-named ways grouped by exact `_norm` name and
+stitched (`stitch_ways`, seeded from the longest way so the largest component wins), fragments
+under `_MIN_ASSEMBLED_M` dropped, and each surviving group becomes a full `CatalogTrail` with
+`source="osm"`, a stable `external_id` (`osm-{min way id}`), **`line_geom` already set** (so
+`ensure_line` fast-paths and the trail is immediately a route-builder candidate), surface/mtb_scale
+from way tags, and difficulty mapped from mtb:scale (0-1 Easy / 2-3 Intermediate / 4+ Advanced).
+Dedup vs existing rows is name-similarity (`_name_match`) + trailhead within 2 km: a lined match
+wins outright, and a **line-less match receives the stitched line as a donation** (fixing the bare
+TrailAPI trailhead directly). The planner (`plan_discovery`) is pure/hermetic
+(`test_osm_discovery.py`); only `discover_trails`/`discover_grid` touch network/DB. Trigger paths,
+all bounded: browsing an OSM-sparse area kicks one background call per ~11 km cell per process
+(`_osm_cells_attempted` in `routers/catalog.py`); `POST /catalog/discover-osm` (admin) and the
+seeder's region pass sweep cells with skip-gates + 1-1.2 s pacing. The frontend shows
+`source` only as the Trail-detail location fallback ("OpenStreetMap" vs "TrailAPI catalog").
+
 ### Reassembling full trails from OSM (catalog_geometry.py)
 
 OSM splits a trail into many same-named ways. `assemble_line` pulls every way matching the trail's
