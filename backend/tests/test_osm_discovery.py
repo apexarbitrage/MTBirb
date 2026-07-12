@@ -197,3 +197,26 @@ def test_discover_trails_wires_fetch_and_inserts(monkeypatch) -> None:
     assert south < 0.002 < north and west < 0.0 < east  # bbox brackets the request point
     assert result["added"] == 1 and result["donated"] == 0
     assert db.committed and db.added[0].external_id == "osm-101"
+
+
+# --- browse-gate cell key + admin gate wiring ------------------------------------------------
+
+
+def test_osm_cell_buckets_points() -> None:
+    from app.routers.catalog import _osm_cell
+
+    assert _osm_cell(37.531, -122.364) == _osm_cell(37.529, -122.361)  # ~same area, one cell
+    assert _osm_cell(37.531, -122.364) != _osm_cell(37.72, -122.364)  # ~20 km apart, new cell
+
+
+def test_discover_osm_endpoint_is_admin_gated() -> None:
+    """503 (fail-closed, ADMIN_TOKEN unset) even with valid params - the guard fires before any
+    Overpass/DB work, mirroring test_admin_guard's discipline."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    resp = TestClient(app).post(
+        "/api/catalog/discover-osm?south=37.0&west=-122.5&north=37.3&east=-122.2"
+    )
+    assert resp.status_code == 503
