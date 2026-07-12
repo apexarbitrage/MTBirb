@@ -6,12 +6,14 @@ front: TrailAPI trails and eBird sightings (recent + notable) per cell, then a p
 seasonality backfill. Cells that are already populated are skipped, so a run is resumable and
 re-running is cheap (important because the TrailAPI free tier is rate-limited).
 
-After the caches are primed it precomputes each trail's wildlife score onto the row, so browsing
-the region's trail list does no spatial work per request (the list just reads the column).
+After the caches are primed it discovers OSM trails region-wide (one paced, skip-gated Overpass
+call per ~16 km cell - the rows arrive with their lines) and then precomputes each trail's
+wildlife score onto the row, so browsing the region's trail list does no spatial work per request.
 
-Trail geometry (OSM) and elevation metrics are intentionally NOT seeded here - they load lazily
-when a trail's detail opens, and bulk Overpass sweeps risk getting the server IP banned. This
-script only needs what makes the *list* fast: trails + wildlife + seasonality + scores.
+Per-trail OSM line *assembly* is still intentionally NOT seeded (that's one Overpass call per
+trail - the bulk-sweep pattern that risks getting the server IP banned); bbox *discovery* is a
+couple orders of magnitude fewer calls for the same coverage, and it makes assembly unnecessary
+for the trails it finds. Elevation metrics still load lazily per trail detail.
 
 Run in the container, e.g.:
     docker compose exec app python -m app.seed_region --all
@@ -33,6 +35,7 @@ from sqlalchemy import select
 from app.config import get_settings
 from app.db import SessionLocal
 from app.models import CatalogTrail
+from app.services.osm_discovery import discover_grid
 from app.services.trail_catalog import cache_trails_near, count_nearby, sightings_near_count
 from app.services.wildlife_likelihood import refresh_catalog_scores
 from app.services.wildlife_sync import (
@@ -110,9 +113,11 @@ async def seed_region(
     do_trails: bool = True,
     do_wildlife: bool = True,
     do_seasonality: bool = True,
+    do_osm: bool = True,
     do_scores: bool = True,
     step: float | None = None,
     max_trail_calls: int | None = None,
+    max_osm_calls: int = 400,
 ) -> None:
     settings = get_settings()
     have_trailapi = bool(settings.rapidapi_key)
@@ -167,6 +172,18 @@ async def seed_region(
                 except Exception as exc:  # noqa: BLE001
                     print(f"  seasonality {code}: error {exc}")
 
+        # Discover OSM trails region-wide (Overpass is keyless): one paced call per ~16 km cell,
+        # cells with OSM coverage skipped - so a capped run is resumable, like the trail pass.
+        # Runs before the score pass so the new rows get their wildlife score in the same run.
+        if do_osm:
+            try:
+                summary = await discover_grid(
+                    db, region.lat_range, region.lon_range, max_calls=max_osm_calls, sleep_s=1.2
+                )
+                print(f"  osm discovery: {summary}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"  osm discovery: error {exc}")
+
         # Precompute the wildlife score onto each row last, once the full local cache is in place,
         # so browsing the region's trail list does zero spatial work per request.
         if do_scores:
@@ -195,13 +212,15 @@ async def _run(args: argparse.Namespace) -> None:
             do_trails=not args.no_trails,
             do_wildlife=not args.no_wildlife,
             do_seasonality=not args.no_seasonality,
+            do_osm=not args.no_osm,
             do_scores=not args.no_scores,
             step=args.step,
             max_trail_calls=args.max_trail_calls,
+            max_osm_calls=args.max_osm_calls,
         )
 
 
-def main() -> None:
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Pre-seed regions (trails + wildlife + seasonality).")
     p.add_argument("regions", nargs="*", help=f"region keys: {', '.join(REGIONS)}")
     p.add_argument("--all", action="store_true", help="seed every known region")
@@ -211,7 +230,15 @@ def main() -> None:
     p.add_argument("--no-trails", action="store_true", help="skip TrailAPI trail seeding")
     p.add_argument("--no-wildlife", action="store_true", help="skip eBird sighting seeding")
     p.add_argument("--no-seasonality", action="store_true", help="skip the seasonality backfill")
+    p.add_argument("--no-osm", action="store_true", help="skip OSM trail discovery")
+    p.add_argument("--max-osm-calls", type=int, default=400,
+                   help="cap Overpass discovery calls per region (default 400; re-runs resume)")
     p.add_argument("--no-scores", action="store_true", help="skip precomputing the wildlife scores")
+    return p
+
+
+def main() -> None:
+    p = build_parser()
     args = p.parse_args()
     if not args.regions and not args.all:
         p.error("name at least one region, or pass --all")
