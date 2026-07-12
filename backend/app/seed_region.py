@@ -178,9 +178,12 @@ async def seed_region(
         if do_osm:
             try:
                 summary = await discover_grid(
-                    db, region.lat_range, region.lon_range, max_calls=max_osm_calls, sleep_s=1.2
+                    db, region.lat_range, region.lon_range, max_calls=max_osm_calls
                 )
                 print(f"  osm discovery: {summary}")
+                if summary.get("rateLimited") or summary.get("aborted"):
+                    print("  ! Overpass is rate-limiting (or repeatedly failing) - stopped early."
+                          " Re-run later; the sweep resumes where it left off.")
             except Exception as exc:  # noqa: BLE001
                 print(f"  osm discovery: error {exc}")
 

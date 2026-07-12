@@ -27,7 +27,12 @@ from geoalchemy2.elements import WKTElement
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.integrations.osm import OverpassClient, _scale_rank, summarize_surface
+from app.integrations.osm import (
+    OverpassClient,
+    OverpassRateLimited,
+    _scale_rank,
+    summarize_surface,
+)
 from app.models import CatalogTrail
 from app.services.catalog_geometry import (
     _MIN_ASSEMBLED_M,
@@ -53,6 +58,13 @@ _DEDUP_RADIUS_M = 2_000.0
 _MIN_OSM_NEARBY = 5
 # Sanity cap on rows created from one pathological bbox.
 _MAX_ROWS_PER_CALL = 300
+# When Overpass says 429, wait at least this long before the one retry (its Retry-After header
+# wins when longer). A second 429 on the retry means the quota is truly exhausted - stop the
+# sweep; skip-gates make a later re-run resume where this one ended.
+_RATE_LIMIT_COOLDOWN_S = 60.0
+# A run of consecutive failures (Overpass outage, network loss) aborts the sweep instead of
+# churning through the whole call budget on errors.
+_MAX_CONSECUTIVE_FAILURES = 5
 
 
 def group_named_ways(ways: list[dict]) -> dict[str, list[dict]]:
@@ -249,26 +261,60 @@ async def discover_grid(
     *,
     max_calls: int,
     client: OverpassClient | None = None,
-    sleep_s: float = 1.0,
+    sleep_s: float = 5.0,
     skip_at: int = _MIN_OSM_NEARBY,
 ) -> dict:
     """Sweep a box cell-by-cell (the admin endpoint + seeder path). Cells that already have
     OSM-sourced rows are skipped, so runs are resumable and re-runs are near-free; each real
-    Overpass call is followed by a polite sleep."""
+    Overpass call is followed by a polite sleep.
+
+    Rate limiting is first-class: a 429 cools down (Retry-After or 60s) and retries the cell
+    once; a second 429 means the per-IP quota is truly spent, so the sweep stops gracefully
+    (`rateLimited: true`) rather than burning the remaining budget into more 429s - re-running
+    later resumes via the skip-gates. A run of other consecutive failures (outage, network)
+    aborts the same way (`aborted: true`)."""
     client = client or OverpassClient()
     calls = added = donated = skipped_cells = 0
+    consecutive_failures = 0
+    rate_limited = aborted = False
     for lat, lon in grid_cells(lat_range, lon_range):
         if calls >= max_calls:
             break
         if count_nearby(db, lat, lon, _DISCOVERY_RADIUS_KM, source="osm") >= skip_at:
             skipped_cells += 1
             continue
-        try:
-            result = await discover_trails(db, lat, lon, client=client)
-            added += result["added"]
-            donated += result["donated"]
-        except Exception:  # noqa: BLE001 - keep sweeping past one bad cell / Overpass hiccup
-            logger.warning("OSM discovery failed for cell (%s, %s)", lat, lon, exc_info=True)
-        calls += 1
+        for attempt in (1, 2):
+            calls += 1
+            try:
+                result = await discover_trails(db, lat, lon, client=client)
+                added += result["added"]
+                donated += result["donated"]
+                consecutive_failures = 0
+            except OverpassRateLimited as exc:
+                if attempt == 1:
+                    cooldown = max(exc.retry_after or 0.0, _RATE_LIMIT_COOLDOWN_S)
+                    logger.info("Overpass rate-limited; cooling down %.0fs then retrying cell", cooldown)
+                    await asyncio.sleep(cooldown)
+                    continue
+                logger.warning("Overpass still rate-limiting after cooldown; stopping sweep")
+                rate_limited = True
+            except Exception:  # noqa: BLE001 - keep sweeping past one bad cell / Overpass hiccup
+                logger.warning("OSM discovery failed for cell (%s, %s)", lat, lon, exc_info=True)
+                consecutive_failures += 1
+                if consecutive_failures >= _MAX_CONSECUTIVE_FAILURES:
+                    logger.warning(
+                        "%d consecutive discovery failures; stopping sweep", consecutive_failures
+                    )
+                    aborted = True
+            break
+        if rate_limited or aborted:
+            break
         await asyncio.sleep(sleep_s)
-    return {"calls": calls, "added": added, "donated": donated, "skippedCells": skipped_cells}
+    return {
+        "calls": calls,
+        "added": added,
+        "donated": donated,
+        "skippedCells": skipped_cells,
+        "rateLimited": rate_limited,
+        "aborted": aborted,
+    }

@@ -234,3 +234,127 @@ def test_catalog_out_carries_source() -> None:
 
     trailapi_row = record_to_catalog({"id": 1, "name": "Sawyer Camp", "lat": "37.5", "lon": "-122.4"})
     assert CatalogTrailOut.from_model(trailapi_row).source == "trailapi"
+
+
+# --- Overpass 429 handling -------------------------------------------------------------------
+
+
+def test_check_rate_limit_raises_with_retry_after() -> None:
+    import httpx
+    import pytest
+
+    from app.integrations.osm import OverpassRateLimited, _check_rate_limit
+
+    with pytest.raises(OverpassRateLimited) as exc:
+        _check_rate_limit(httpx.Response(429, headers={"Retry-After": "30"}))
+    assert exc.value.retry_after == 30.0
+
+    with pytest.raises(OverpassRateLimited) as exc:
+        _check_rate_limit(httpx.Response(429))  # no header -> caller picks its own cooldown
+    assert exc.value.retry_after is None
+
+    with pytest.raises(OverpassRateLimited) as exc:
+        _check_rate_limit(httpx.Response(429, headers={"Retry-After": "Wed, 21 Oct 2026 07:28:00 GMT"}))
+    assert exc.value.retry_after is None  # HTTP-date form ignored
+
+    _check_rate_limit(httpx.Response(200))  # non-429 passes through untouched
+    _check_rate_limit(httpx.Response(504))  # other errors stay raise_for_status's job
+
+
+def test_overpass_url_comes_from_settings(monkeypatch) -> None:
+    from app.integrations import osm
+
+    monkeypatch.setattr(
+        osm, "get_settings", lambda: SimpleNamespace(overpass_url="https://mirror.example/api")
+    )
+    assert osm.OverpassClient()._url == "https://mirror.example/api"
+    # A blank env value must not disable the client.
+    monkeypatch.setattr(osm, "get_settings", lambda: SimpleNamespace(overpass_url=""))
+    assert osm.OverpassClient()._url == osm.OVERPASS_URL
+    # An explicit URL always wins.
+    assert osm.OverpassClient(url="http://x")._url == "http://x"
+
+
+def _grid_harness(monkeypatch, fetch_behavior, lat_range=(0.0, 0.35)):
+    """Run discover_grid over an N x 1-cell box (default 2 cells at the 0.15 pitch) with a
+    scripted fetch and recorded sleeps."""
+    import asyncio
+
+    from app.services import osm_discovery
+
+    sleeps: list[float] = []
+
+    async def fake_sleep(s):
+        sleeps.append(s)
+
+    class FakeClient:
+        def __init__(self):
+            self.fetches = 0
+
+        async def fetch_ways(self, *a, **kw):
+            self.fetches += 1
+            return fetch_behavior(self.fetches)
+
+    monkeypatch.setattr(osm_discovery, "count_nearby", lambda *a, **kw: 0)
+    monkeypatch.setattr(osm_discovery, "_existing_rows", lambda *a: [])
+    monkeypatch.setattr(osm_discovery.asyncio, "sleep", fake_sleep)
+    client = FakeClient()
+
+    class FakeDb:
+        def add(self, obj): ...
+        def get(self, model, row_id): ...
+        def commit(self): ...
+
+    result = asyncio.run(
+        osm_discovery.discover_grid(
+            FakeDb(), lat_range, (0.0, 0.1), max_calls=10, client=client
+        )
+    )
+    return result, client, sleeps
+
+
+def test_grid_cools_down_and_retries_on_rate_limit(monkeypatch) -> None:
+    from app.integrations.osm import OverpassRateLimited
+
+    def behavior(n):
+        if n == 1:
+            raise OverpassRateLimited(retry_after=90.0)
+        return []  # retry + later cells succeed (empty area)
+
+    result, client, sleeps = _grid_harness(monkeypatch, behavior)
+    assert result["rateLimited"] is False
+    assert 90.0 in sleeps  # honored the (longer) Retry-After as the cooldown
+    assert client.fetches == 3  # cell 1 twice (429 then ok) + cell 2 once
+
+
+def test_grid_stops_when_rate_limit_persists(monkeypatch) -> None:
+    from app.integrations.osm import OverpassRateLimited
+
+    def behavior(n):
+        raise OverpassRateLimited(retry_after=None)
+
+    result, client, sleeps = _grid_harness(monkeypatch, behavior)
+    assert result["rateLimited"] is True
+    assert client.fetches == 2  # one cell, two attempts - remaining cells untouched
+    assert result["calls"] == 2
+    assert 60.0 in sleeps  # default cooldown when no Retry-After
+
+
+def test_grid_aborts_after_consecutive_failures(monkeypatch) -> None:
+    def behavior(n):
+        raise RuntimeError("overpass melted")
+
+    # 7 cells available; the sweep must stop at the 5-failure threshold, not churn through all.
+    result, client, sleeps = _grid_harness(monkeypatch, behavior, lat_range=(0.0, 1.0))
+    assert result["aborted"] is True and client.fetches == 5
+
+
+def test_grid_success_resets_failure_streak(monkeypatch) -> None:
+    def behavior(n):
+        if n == 3:
+            return []  # one success mid-run breaks the streak
+        raise RuntimeError("flaky")
+
+    result, client, sleeps = _grid_harness(monkeypatch, behavior, lat_range=(0.0, 1.0))
+    # Failures: cells 1,2 (streak 2) - success cell 3 resets - failures 4..7 (streak 4) < 5.
+    assert result["aborted"] is False and client.fetches == 7
