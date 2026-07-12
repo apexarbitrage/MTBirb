@@ -14,6 +14,30 @@ from app.config import get_settings
 
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
+
+class OverpassRateLimited(Exception):
+    """Overpass returned 429 - the caller should cool down (and may retry after `retry_after`
+    seconds when the server said how long, else pick its own cooldown)."""
+
+    def __init__(self, retry_after: float | None = None) -> None:
+        super().__init__(f"Overpass rate-limited (retry after {retry_after or 'unspecified'}s)")
+        self.retry_after = retry_after
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    """The seconds form of a Retry-After header, or None (absent or the HTTP-date form)."""
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _check_rate_limit(response: httpx.Response) -> None:
+    if response.status_code == 429:
+        raise OverpassRateLimited(_parse_retry_after(response.headers.get("Retry-After")))
+
 # Ridable ways; exclude explicit bicycle=no. mtb:scale* tags, when present, give difficulty.
 _QUERY_TEMPLATE = """[out:json][timeout:{timeout}];
 (
@@ -41,8 +65,10 @@ out geom;"""
 
 
 class OverpassClient:
-    def __init__(self, url: str = OVERPASS_URL) -> None:
-        self._url = url
+    def __init__(self, url: str | None = None) -> None:
+        # Configurable so heavy seeding runs can point at a mirror (OVERPASS_URL in .env);
+        # the guard keeps a blank env value from disabling the client.
+        self._url = url or get_settings().overpass_url or OVERPASS_URL
 
     async def fetch_ways(
         self,
@@ -85,6 +111,8 @@ class OverpassClient:
         headers = {"User-Agent": get_settings().weather_user_agent}
         async with httpx.AsyncClient(timeout=timeout + 10, headers=headers) as client:
             response = await client.post(self._url, data={"data": query})
+            # Surface 429 as its own signal so sweeps can cool down instead of churning on.
+            _check_rate_limit(response)
             response.raise_for_status()
             return parse_ways(response.json().get("elements", []))
 
