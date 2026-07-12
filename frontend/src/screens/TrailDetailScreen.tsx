@@ -172,7 +172,8 @@ export function TrailDetailScreen() {
             <div style={{ flex: 1 }}>
               <div className={s.trailTitle}>{trail.name}</div>
               <div className={s.location}>
-                {[trail.city, trail.region].filter(Boolean).join(", ") || "TrailAPI catalog"}
+                {[trail.city, trail.region].filter(Boolean).join(", ") ||
+                  (trail.source === "osm" ? "OpenStreetMap" : "TrailAPI catalog")}
                 {weather ? ` · ${weather.temperature}°${weather.temperatureUnit} · ${shortSky(weather.shortForecast)}` : ""}
               </div>
             </div>

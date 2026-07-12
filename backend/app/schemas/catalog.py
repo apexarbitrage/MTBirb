@@ -45,7 +45,8 @@ def _recency_pct(dt: datetime | None) -> int:
 
 
 class CatalogTrailOut(BaseModel):
-    id: str  # TrailAPI external id
+    id: str  # catalog external id (TrailAPI numeric, or "osm-{way id}" for discovered trails)
+    source: str = "trailapi"  # "trailapi" | "osm" - where this trail was discovered
     name: str
     difficulty: str | None
     lengthMi: float | None
@@ -101,6 +102,8 @@ class CatalogTrailOut(BaseModel):
         wildlife = _wildlife_fields(score_info, with_factors)
         return cls(
             id=t.external_id,
+            # The SQLAlchemy column default applies at flush, so an unflushed row reads None here.
+            source=t.source or "trailapi",
             name=t.name,
             difficulty=t.difficulty,
             lengthMi=t.length_mi,

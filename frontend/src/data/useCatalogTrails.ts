@@ -11,6 +11,8 @@ import { normalizeDifficulty, type SightingFactor, type Trail } from "./trails";
 
 export interface CatalogTrail {
   id: string;
+  /** Where the trail was discovered: "trailapi" | "osm". */
+  source: string;
   name: string;
   difficulty: string | null;
   lengthMi: number | null;

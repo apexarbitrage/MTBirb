@@ -220,3 +220,17 @@ def test_discover_osm_endpoint_is_admin_gated() -> None:
         "/api/catalog/discover-osm?south=37.0&west=-122.5&north=37.3&east=-122.2"
     )
     assert resp.status_code == 503
+
+
+# --- source surfacing ------------------------------------------------------------------------
+
+
+def test_catalog_out_carries_source() -> None:
+    from app.schemas.catalog import CatalogTrailOut
+    from app.services.trail_catalog import record_to_catalog
+
+    osm_row = group_to_catalog("Coyote Ridge Trail", _ridge_ways(), [(0.0, 0.0), (0.0, 0.004)])
+    assert CatalogTrailOut.from_model(osm_row).source == "osm"
+
+    trailapi_row = record_to_catalog({"id": 1, "name": "Sawyer Camp", "lat": "37.5", "lon": "-122.4"})
+    assert CatalogTrailOut.from_model(trailapi_row).source == "trailapi"
