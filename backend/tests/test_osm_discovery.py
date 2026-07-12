@@ -358,3 +358,49 @@ def test_grid_success_resets_failure_streak(monkeypatch) -> None:
     result, client, sleeps = _grid_harness(monkeypatch, behavior, lat_range=(0.0, 1.0))
     # Failures: cells 1,2 (streak 2) - success cell 3 resets - failures 4..7 (streak 4) < 5.
     assert result["aborted"] is False and client.fetches == 7
+
+
+# --- Overpass timeouts are "busy" signals ----------------------------------------------------
+
+
+def test_run_translates_read_timeout_to_busy(monkeypatch) -> None:
+    import asyncio
+
+    import httpx
+    import pytest
+
+    from app.integrations import osm
+
+    class FakeAsyncClient:
+        def __init__(self, *a, **kw): ...
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, *a, **kw):
+            raise httpx.ReadTimeout("queued past the read timeout")
+
+    monkeypatch.setattr(osm.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(
+        osm, "get_settings", lambda: SimpleNamespace(overpass_url="", weather_user_agent="t")
+    )
+    with pytest.raises(osm.OverpassBusy) as exc:
+        asyncio.run(osm.OverpassClient().fetch_ways(0, 0, 1, 1))
+    assert exc.value.retry_after is None
+    assert not isinstance(exc.value, osm.OverpassRateLimited)  # busy, but not an explicit 429
+
+
+def test_grid_cools_down_on_timeout_busy(monkeypatch) -> None:
+    from app.integrations.osm import OverpassBusy
+
+    def behavior(n):
+        if n == 1:
+            raise OverpassBusy(reason="timing out under load")
+        return []
+
+    result, client, sleeps = _grid_harness(monkeypatch, behavior)
+    assert result["rateLimited"] is False
+    assert 60.0 in sleeps  # default cooldown (timeouts carry no Retry-After)
+    assert client.fetches == 3  # cell 1 retried after the cooldown, cell 2 clean

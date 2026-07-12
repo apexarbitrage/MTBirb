@@ -15,13 +15,24 @@ from app.config import get_settings
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 
 
-class OverpassRateLimited(Exception):
-    """Overpass returned 429 - the caller should cool down (and may retry after `retry_after`
-    seconds when the server said how long, else pick its own cooldown)."""
+class OverpassBusy(Exception):
+    """Overpass can't serve us right now - the caller should cool down (and may retry after
+    `retry_after` seconds when the server said how long, else pick its own cooldown).
+
+    Raised for an explicit 429 (subclass below) and for read timeouts: when the instance is
+    overloaded or our IP is being throttled, requests sit in its queue until the client's read
+    timeout trips - operationally the same "back off" signal as a 429."""
+
+    def __init__(self, retry_after: float | None = None, reason: str = "busy") -> None:
+        super().__init__(f"Overpass {reason} (retry after {retry_after or 'unspecified'}s)")
+        self.retry_after = retry_after
+
+
+class OverpassRateLimited(OverpassBusy):
+    """Overpass returned 429 Too Many Requests."""
 
     def __init__(self, retry_after: float | None = None) -> None:
-        super().__init__(f"Overpass rate-limited (retry after {retry_after or 'unspecified'}s)")
-        self.retry_after = retry_after
+        super().__init__(retry_after, reason="rate-limited")
 
 
 def _parse_retry_after(value: str | None) -> float | None:
@@ -109,8 +120,15 @@ class OverpassClient:
     async def _run(self, query: str, timeout: int) -> list[dict]:
         # Overpass rejects the default python-httpx User-Agent (406); send a real one.
         headers = {"User-Agent": get_settings().weather_user_agent}
-        async with httpx.AsyncClient(timeout=timeout + 10, headers=headers) as client:
-            response = await client.post(self._url, data={"data": query})
+        # The read timeout leaves generous headroom over the query's own [timeout:N]: under load
+        # Overpass queues a request *before* executing it, so wall time can far exceed N.
+        async with httpx.AsyncClient(timeout=timeout + 35, headers=headers) as client:
+            try:
+                response = await client.post(self._url, data={"data": query})
+            except httpx.TimeoutException as exc:
+                # The request sat in the overload queue past our read timeout - same "back off"
+                # signal as a 429, so sweeps cool down instead of churning through their budget.
+                raise OverpassBusy(reason="timing out under load") from exc
             # Surface 429 as its own signal so sweeps can cool down instead of churning on.
             _check_rate_limit(response)
             response.raise_for_status()

@@ -265,10 +265,12 @@ TrailAPI trailhead directly). The planner (`plan_discovery`) is pure/hermetic
 (`test_osm_discovery.py`); only `discover_trails`/`discover_grid` touch network/DB. Trigger paths,
 all bounded: browsing an OSM-sparse area kicks one background call per ~11 km cell per process
 (`_osm_cells_attempted` in `routers/catalog.py`); `POST /catalog/discover-osm` (admin) and the
-seeder's region pass sweep cells with skip-gates + 5 s pacing. Overpass **429s are first-class**:
-`_run` raises `OverpassRateLimited` (with Retry-After), and `discover_grid` cools down (>=60 s),
-retries the cell once, then stops the sweep gracefully (`rateLimited: true`) - never churn through
-the call budget against a rate-limiter. Sweeps resume via the skip-gates. The endpoint is
+seeder's region pass sweep cells with skip-gates + 5 s pacing. Overpass **"busy" signals are
+first-class**: `_run` raises `OverpassBusy` on a 429 (`OverpassRateLimited`, with Retry-After) *and*
+on a read timeout (overloaded instances queue requests, so a timeout is the same back-off signal),
+and `discover_grid` cools down (>=60 s), retries the cell once, then stops the sweep gracefully
+(`rateLimited: true`) - never churn through the call budget against a struggling server. Sweeps
+resume via the skip-gates. The endpoint is
 configurable (`OVERPASS_URL` in .env) so heavy seeding runs can use a mirror. The frontend shows
 `source` only as the Trail-detail location fallback ("OpenStreetMap" vs "TrailAPI catalog").
 
