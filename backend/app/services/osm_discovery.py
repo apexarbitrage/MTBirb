@@ -27,12 +27,7 @@ from geoalchemy2.elements import WKTElement
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.integrations.osm import (
-    OverpassClient,
-    OverpassRateLimited,
-    _scale_rank,
-    summarize_surface,
-)
+from app.integrations.osm import OverpassBusy, OverpassClient, _scale_rank, summarize_surface
 from app.models import CatalogTrail
 from app.services.catalog_geometry import (
     _MIN_ASSEMBLED_M,
@@ -58,9 +53,10 @@ _DEDUP_RADIUS_M = 2_000.0
 _MIN_OSM_NEARBY = 5
 # Sanity cap on rows created from one pathological bbox.
 _MAX_ROWS_PER_CALL = 300
-# When Overpass says 429, wait at least this long before the one retry (its Retry-After header
-# wins when longer). A second 429 on the retry means the quota is truly exhausted - stop the
-# sweep; skip-gates make a later re-run resume where this one ended.
+# When Overpass says it's busy (429, or a read timeout from sitting in its overload queue), wait
+# at least this long before the one retry (a Retry-After header wins when longer). Busy again on
+# the retry means the server truly can't take us now - stop the sweep; skip-gates make a later
+# re-run resume where this one ended.
 _RATE_LIMIT_COOLDOWN_S = 60.0
 # A run of consecutive failures (Overpass outage, network loss) aborts the sweep instead of
 # churning through the whole call budget on errors.
@@ -268,11 +264,11 @@ async def discover_grid(
     OSM-sourced rows are skipped, so runs are resumable and re-runs are near-free; each real
     Overpass call is followed by a polite sleep.
 
-    Rate limiting is first-class: a 429 cools down (Retry-After or 60s) and retries the cell
-    once; a second 429 means the per-IP quota is truly spent, so the sweep stops gracefully
-    (`rateLimited: true`) rather than burning the remaining budget into more 429s - re-running
-    later resumes via the skip-gates. A run of other consecutive failures (outage, network)
-    aborts the same way (`aborted: true`)."""
+    Overpass "busy" signals are first-class: a 429 or an overload read-timeout cools down
+    (Retry-After or 60s) and retries the cell once; busy again means the server truly can't take
+    us now, so the sweep stops gracefully (`rateLimited: true`) rather than burning the remaining
+    budget - re-running later resumes via the skip-gates. A run of other consecutive failures
+    (outage, network) aborts the same way (`aborted: true`)."""
     client = client or OverpassClient()
     calls = added = donated = skipped_cells = 0
     consecutive_failures = 0
@@ -290,13 +286,13 @@ async def discover_grid(
                 added += result["added"]
                 donated += result["donated"]
                 consecutive_failures = 0
-            except OverpassRateLimited as exc:
+            except OverpassBusy as exc:
                 if attempt == 1:
                     cooldown = max(exc.retry_after or 0.0, _RATE_LIMIT_COOLDOWN_S)
-                    logger.info("Overpass rate-limited; cooling down %.0fs then retrying cell", cooldown)
+                    logger.info("Overpass busy (%s); cooling down %.0fs then retrying cell", exc, cooldown)
                     await asyncio.sleep(cooldown)
                     continue
-                logger.warning("Overpass still rate-limiting after cooldown; stopping sweep")
+                logger.warning("Overpass still busy after cooldown; stopping sweep")
                 rate_limited = True
             except Exception:  # noqa: BLE001 - keep sweeping past one bad cell / Overpass hiccup
                 logger.warning("OSM discovery failed for cell (%s, %s)", lat, lon, exc_info=True)

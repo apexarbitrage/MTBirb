@@ -182,8 +182,9 @@ async def seed_region(
                 )
                 print(f"  osm discovery: {summary}")
                 if summary.get("rateLimited") or summary.get("aborted"):
-                    print("  ! Overpass is rate-limiting (or repeatedly failing) - stopped early."
-                          " Re-run later; the sweep resumes where it left off.")
+                    print("  ! Overpass is busy (rate-limiting/overloaded) - stopped early."
+                          " Re-run later (or set OVERPASS_URL to a mirror);"
+                          " the sweep resumes where it left off.")
             except Exception as exc:  # noqa: BLE001
                 print(f"  osm discovery: error {exc}")
 
