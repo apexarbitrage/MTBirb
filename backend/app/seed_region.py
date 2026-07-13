@@ -34,6 +34,7 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import SessionLocal
+from app.logging_config import configure_logging
 from app.models import CatalogTrail
 from app.services.osm_discovery import discover_grid
 from app.services.trail_catalog import cache_trails_near, count_nearby, sightings_near_count
@@ -242,6 +243,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    # The services log through `logging` (endpoint in use, Overpass cooldowns, per-cell
+    # failures); without this only WARNING+ reaches the console and runs are undiagnosable.
+    configure_logging()
     p = build_parser()
     args = p.parse_args()
     if not args.regions and not args.all:

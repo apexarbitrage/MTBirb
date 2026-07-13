@@ -21,9 +21,12 @@ class Settings(BaseSettings):
         return url
     ebird_api_key: str = ""
     weather_user_agent: str = "mtbirb (set WEATHER_USER_AGENT in .env)"
-    # Overpass endpoint for OSM trail geometry/discovery. The public instance rate-limits
-    # sustained sweeps; point heavy seeding runs at a mirror (e.g.
-    # https://overpass.kumi.systems/api/interpreter) and switch back afterwards.
+    # Overpass endpoint for OSM trail geometry/discovery. The main public instance rate-limits
+    # sustained sweeps (and PaaS egress IPs are shared, so its per-IP penalty may never clear);
+    # for heavy seeding, point this at another public instance and switch back afterwards.
+    # Mirror availability drifts - check the current list at
+    # https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances and verify
+    # with a small curl before a long run (see .env.example).
     overpass_url: str = "https://overpass-api.de/api/interpreter"
     rapidapi_key: str = ""  # for TrailAPI (RapidAPI); see app/integrations/trailapi.py
     tomtom_api_key: str = ""  # for "fun drive" routing; see app/integrations/tomtom.py

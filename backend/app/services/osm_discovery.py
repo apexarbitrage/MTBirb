@@ -270,6 +270,8 @@ async def discover_grid(
     budget - re-running later resumes via the skip-gates. A run of other consecutive failures
     (outage, network) aborts the same way (`aborted: true`)."""
     client = client or OverpassClient()
+    endpoint = getattr(client, "url", "unknown")
+    logger.info("OSM discovery sweep via %s", endpoint)
     calls = added = donated = skipped_cells = 0
     consecutive_failures = 0
     rate_limited = aborted = False
@@ -292,7 +294,9 @@ async def discover_grid(
                     logger.info("Overpass busy (%s); cooling down %.0fs then retrying cell", exc, cooldown)
                     await asyncio.sleep(cooldown)
                     continue
-                logger.warning("Overpass still busy after cooldown; stopping sweep")
+                logger.warning(
+                    "Overpass still busy after cooldown (%s via %s); stopping sweep", exc, endpoint
+                )
                 rate_limited = True
             except Exception:  # noqa: BLE001 - keep sweeping past one bad cell / Overpass hiccup
                 logger.warning("OSM discovery failed for cell (%s, %s)", lat, lon, exc_info=True)
@@ -307,6 +311,7 @@ async def discover_grid(
             break
         await asyncio.sleep(sleep_s)
     return {
+        "endpoint": endpoint,
         "calls": calls,
         "added": added,
         "donated": donated,
