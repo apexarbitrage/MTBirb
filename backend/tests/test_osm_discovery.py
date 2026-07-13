@@ -290,6 +290,7 @@ def _grid_harness(monkeypatch, fetch_behavior, lat_range=(0.0, 0.35)):
     class FakeClient:
         def __init__(self):
             self.fetches = 0
+            self.url = "fake://overpass"
 
         async def fetch_ways(self, *a, **kw):
             self.fetches += 1
@@ -404,3 +405,45 @@ def test_grid_cools_down_on_timeout_busy(monkeypatch) -> None:
     assert result["rateLimited"] is False
     assert 60.0 in sleeps  # default cooldown (timeouts carry no Retry-After)
     assert client.fetches == 3  # cell 1 retried after the cooldown, cell 2 clean
+
+
+# --- endpoint visibility + dead-host classification ------------------------------------------
+
+
+def test_connect_failure_is_not_classified_as_busy(monkeypatch) -> None:
+    """A dead/unreachable endpoint (dead mirror, DNS typo) must surface as a real error, not
+    'busy' - otherwise a misconfigured OVERPASS_URL reads as rate-limiting forever."""
+    import asyncio
+
+    import httpx
+    import pytest
+
+    from app.integrations import osm
+
+    class FakeAsyncClient:
+        def __init__(self, *a, **kw): ...
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, *a, **kw):
+            raise httpx.ConnectError("host unreachable")
+
+    monkeypatch.setattr(osm.httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(
+        osm, "get_settings", lambda: SimpleNamespace(overpass_url="", weather_user_agent="t")
+    )
+    with pytest.raises(httpx.ConnectError):
+        asyncio.run(osm.OverpassClient().fetch_ways(0, 0, 1, 1))
+    with pytest.raises(osm.OverpassBusy):
+        raise osm.OverpassBusy()  # sanity: the busy type itself is unrelated to connect errors
+
+
+def test_grid_summary_reports_endpoint(monkeypatch) -> None:
+    def behavior(n):
+        return []
+
+    result, client, sleeps = _grid_harness(monkeypatch, behavior)
+    assert result["endpoint"] == "fake://overpass"

@@ -81,6 +81,12 @@ class OverpassClient:
         # the guard keeps a blank env value from disabling the client.
         self._url = url or get_settings().overpass_url or OVERPASS_URL
 
+    @property
+    def url(self) -> str:
+        """The endpoint in use - surfaced in sweep logs/summaries so a misconfigured or
+        missing OVERPASS_URL is visible instead of silently hitting the default instance."""
+        return self._url
+
     async def fetch_ways(
         self,
         south: float,
@@ -125,9 +131,12 @@ class OverpassClient:
         async with httpx.AsyncClient(timeout=timeout + 35, headers=headers) as client:
             try:
                 response = await client.post(self._url, data={"data": query})
-            except httpx.TimeoutException as exc:
+            except httpx.ReadTimeout as exc:
                 # The request sat in the overload queue past our read timeout - same "back off"
                 # signal as a 429, so sweeps cool down instead of churning through their budget.
+                # Deliberately ReadTimeout only: a connect timeout/refusal means the host is
+                # unreachable (dead mirror, DNS, firewall) - that's a real error, not "busy",
+                # and must surface as one so a misconfigured endpoint isn't mistaken for load.
                 raise OverpassBusy(reason="timing out under load") from exc
             # Surface 429 as its own signal so sweeps can cool down instead of churning on.
             _check_rate_limit(response)
