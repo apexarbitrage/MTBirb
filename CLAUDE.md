@@ -271,7 +271,15 @@ on a read timeout (overloaded instances queue requests, so a timeout is the same
 and `discover_grid` cools down (>=60 s), retries the cell once, then stops the sweep gracefully
 (`rateLimited: true`) - never churn through the call budget against a struggling server. Sweeps
 resume via the skip-gates. The endpoint is
-configurable (`OVERPASS_URL` in .env) so heavy seeding runs can use a mirror. The frontend shows
+configurable (`OVERPASS_URL` in .env) so heavy seeding runs can use a mirror. **Public Overpass
+instances tarpit datacenter egress IPs** (Render's included): every call from such a host hangs
+~60s *holding a DB session*, and a few concurrent background enrichments exhaust the pool and 502
+the app - so `OVERPASS_ENABLED=false` (set in render.yaml) turns off ALL request-path Overpass
+work there (detail line-assembly, browse discovery, builder enrichment kicks; the admin Overpass
+endpoints 503 with a pointer). Such deploys get their OSM data from the **full seed** run on a
+clean-IP machine against the production DB: `python -m app.seed_region --all --enrich-lines
+--metrics` (adds per-trail line assembly for what discovery missed + bulk Open-Meteo metrics, so
+request-time work is DB-only except USGS refinement and live weather, which work from anywhere). The frontend shows
 `source` only as the Trail-detail location fallback ("OpenStreetMap" vs "TrailAPI catalog").
 
 ### Reassembling full trails from OSM (catalog_geometry.py)

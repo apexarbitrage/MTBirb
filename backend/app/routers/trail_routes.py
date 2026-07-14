@@ -20,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.db import get_db
 from app.integrations.weather import WeatherClient
 from app.models import CatalogTrail, TrailRoute
@@ -109,15 +110,20 @@ async def route_candidates(
 
     # Hybrid coverage: lined candidates return instantly; the nearest un-lined trails get a
     # bounded background line-assembly so they can join the candidate set on a later poll.
-    unlined = unlined_nearby(db, ids)
-    targets = pick_enrich_targets(
-        [t.external_id for t in unlined], _line_attempted, _enriching_trails
-    )
-    for ext_id in targets:
-        _line_attempted.add(ext_id)
-        asyncio.create_task(_enrich_trail_background(ext_id))
-    # Just-kicked tasks haven't hit the in-flight set yet (they start on the next loop tick).
-    enriching = {t.external_id for t in unlined} & _enriching_trails | set(targets)
+    # Skipped when this deploy can't reach Overpass (OVERPASS_ENABLED=false) - a hanging call
+    # holds a DB connection, and 8 at once is the pool-exhaustion/502 recipe; on such deploys
+    # candidates come from the seeded lines alone (enrichingCount 0 = client doesn't poll).
+    enriching: set[str] = set()
+    if get_settings().overpass_enabled:
+        unlined = unlined_nearby(db, ids)
+        targets = pick_enrich_targets(
+            [t.external_id for t in unlined], _line_attempted, _enriching_trails
+        )
+        for ext_id in targets:
+            _line_attempted.add(ext_id)
+            asyncio.create_task(_enrich_trail_background(ext_id))
+        # Just-kicked tasks haven't hit the in-flight set yet (they start on the next loop tick).
+        enriching = {t.external_id for t in unlined} & _enriching_trails | set(targets)
 
     return {
         "members": [RouteTrailLite.from_model(m, lines.get(m.external_id)) for m in members],

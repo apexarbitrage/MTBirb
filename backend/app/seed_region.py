@@ -17,8 +17,17 @@ for the trails it finds. Elevation metrics still load lazily per trail detail.
 
 Run in the container, e.g.:
     docker compose exec app python -m app.seed_region --all
-    docker compose exec app python -m app.seed_region norcal ct ny
     docker compose exec app python -m app.seed_region ny --no-trails      # wildlife only (save TrailAPI quota)
+
+The FULL seed - everything the app needs so a deploy never depends on throttled request-time
+calls (run from a machine with clean Overpass access, pointed at the production DB):
+    docker compose exec -e DATABASE_URL=<prod-url> app python -m app.seed_region --all \
+        --enrich-lines --metrics
+That adds per-trail line assembly for whatever OSM discovery didn't cover (--enrich-lines) and
+bulk Open-Meteo elevation metrics for every lined trail (--metrics), on top of the default
+trails + wildlife + seasonality + osm discovery + scores passes. Deploys with
+OVERPASS_ENABLED=false (e.g. Render, whose egress IPs Overpass tarpits) rely on these runs for
+all their OSM data.
 
 Needs RAPIDAPI_KEY (trails) and EBIRD_API_KEY (wildlife + seasonality); a missing key skips that pass.
 """
@@ -34,10 +43,13 @@ from sqlalchemy import select
 
 from app.config import get_settings
 from app.db import SessionLocal
+from app.integrations.elevation import OpenMeteoElevation
 from app.logging_config import configure_logging
 from app.models import CatalogTrail
+from app.services.catalog_geometry import enrich_region
 from app.services.osm_discovery import discover_grid
 from app.services.trail_catalog import cache_trails_near, count_nearby, sightings_near_count
+from app.services.trail_metrics import bulk_compute_metrics
 from app.services.wildlife_likelihood import refresh_catalog_scores
 from app.services.wildlife_sync import (
     backfill_region_history,
@@ -115,10 +127,14 @@ async def seed_region(
     do_wildlife: bool = True,
     do_seasonality: bool = True,
     do_osm: bool = True,
+    do_lines: bool = False,
+    do_metrics: bool = False,
     do_scores: bool = True,
     step: float | None = None,
     max_trail_calls: int | None = None,
     max_osm_calls: int = 400,
+    max_line_calls: int = 400,
+    max_metric_trails: int = 2000,
 ) -> None:
     settings = get_settings()
     have_trailapi = bool(settings.rapidapi_key)
@@ -189,6 +205,32 @@ async def seed_region(
             except Exception as exc:  # noqa: BLE001
                 print(f"  osm discovery: error {exc}")
 
+        # Per-trail OSM line assembly for whatever discovery couldn't cover (TrailAPI rows whose
+        # names matched nothing - typos, unbounded trails). One Overpass call per trail, so this
+        # is opt-in (--enrich-lines) and meant for machines with clean Overpass access; deploys
+        # with OVERPASS_ENABLED=false rely entirely on runs like this for their lines.
+        if do_lines:
+            try:
+                summary = await enrich_region(
+                    db, region.lat_range, region.lon_range, max_calls=max_line_calls
+                )
+                print(f"  line assembly: {summary}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"  line assembly: error {exc}")
+
+        # Bulk Open-Meteo elevation metrics for every lined trail (keyless, works from anywhere),
+        # so no trail detail ever needs the coarse pass at request time - the per-detail USGS
+        # refinement still upgrades trails on first open.
+        if do_metrics:
+            try:
+                summary = await bulk_compute_metrics(
+                    db, region.lat_range, region.lon_range, OpenMeteoElevation(),
+                    max_trails=max_metric_trails,
+                )
+                print(f"  metrics: {summary}")
+            except Exception as exc:  # noqa: BLE001
+                print(f"  metrics: error {exc}")
+
         # Precompute the wildlife score onto each row last, once the full local cache is in place,
         # so browsing the region's trail list does zero spatial work per request.
         if do_scores:
@@ -218,10 +260,14 @@ async def _run(args: argparse.Namespace) -> None:
             do_wildlife=not args.no_wildlife,
             do_seasonality=not args.no_seasonality,
             do_osm=not args.no_osm,
+            do_lines=args.enrich_lines,
+            do_metrics=args.metrics,
             do_scores=not args.no_scores,
             step=args.step,
             max_trail_calls=args.max_trail_calls,
             max_osm_calls=args.max_osm_calls,
+            max_line_calls=args.max_line_calls,
+            max_metric_trails=args.max_metric_trails,
         )
 
 
@@ -238,6 +284,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--no-osm", action="store_true", help="skip OSM trail discovery")
     p.add_argument("--max-osm-calls", type=int, default=400,
                    help="cap Overpass discovery calls per region (default 400; re-runs resume)")
+    p.add_argument("--enrich-lines", action="store_true",
+                   help="assemble OSM lines for still-line-less trails (1 Overpass call/trail)")
+    p.add_argument("--max-line-calls", type=int, default=400,
+                   help="cap per-trail line-assembly Overpass calls per region (default 400)")
+    p.add_argument("--metrics", action="store_true",
+                   help="bulk-compute Open-Meteo elevation metrics for lined trails")
+    p.add_argument("--max-metric-trails", type=int, default=2000,
+                   help="cap trails per region for the metrics pass (default 2000)")
     p.add_argument("--no-scores", action="store_true", help="skip precomputing the wildlife scores")
     return p
 

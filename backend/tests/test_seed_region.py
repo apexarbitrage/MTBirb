@@ -35,3 +35,12 @@ def test_parser_accepts_osm_flags():
     # Defaults: OSM discovery on, capped at 400 per region.
     defaults = build_parser().parse_args(["ct"])
     assert defaults.no_osm is False and defaults.max_osm_calls == 400
+
+
+def test_parser_accepts_full_seed_flags():
+    from app.seed_region import build_parser
+
+    args = build_parser().parse_args(["ct", "--enrich-lines", "--metrics", "--max-line-calls", "50"])
+    assert args.enrich_lines is True and args.metrics is True and args.max_line_calls == 50
+    defaults = build_parser().parse_args(["ct"])
+    assert defaults.enrich_lines is False and defaults.metrics is False  # opt-in passes
