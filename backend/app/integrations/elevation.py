@@ -42,21 +42,27 @@ class OpenMeteoElevation:
 class UsgsElevation:
     source = "usgs"
 
+    # EPQS is one HTTP call per point and often slow/flaky; the whole lookup gets a hard budget
+    # so a bad EPQS day can't pin the caller (which may be holding a DB session) for minutes -
+    # the refinement simply fails soft and the trail keeps its Open-Meteo metrics until retried.
+    _TOTAL_BUDGET_S = 45.0
+
     def __init__(self, concurrency: int = 6) -> None:
         self._sem = asyncio.Semaphore(concurrency)
 
     async def lookup(self, points: list[tuple[float, float]]) -> list[float]:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with asyncio.timeout(self._TOTAL_BUDGET_S):
+            async with httpx.AsyncClient(timeout=30) as client:
 
-            async def one(lat: float, lon: float) -> float:
-                async with self._sem:
-                    resp = await client.get(
-                        USGS_EPQS_URL,
-                        params={"x": lon, "y": lat, "units": "Meters", "wkid": 4326},
-                    )
-                    resp.raise_for_status()
-                    value = float(resp.json()["value"])
-                    # EPQS returns a large negative sentinel for points outside its coverage.
-                    return value if value > -1e5 else 0.0
+                async def one(lat: float, lon: float) -> float:
+                    async with self._sem:
+                        resp = await client.get(
+                            USGS_EPQS_URL,
+                            params={"x": lon, "y": lat, "units": "Meters", "wkid": 4326},
+                        )
+                        resp.raise_for_status()
+                        value = float(resp.json()["value"])
+                        # EPQS returns a large negative sentinel for points outside its coverage.
+                        return value if value > -1e5 else 0.0
 
-            return list(await asyncio.gather(*(one(lat, lon) for lat, lon in points)))
+                return list(await asyncio.gather(*(one(lat, lon) for lat, lon in points)))
