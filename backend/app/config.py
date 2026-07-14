@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     # https://wiki.openstreetmap.org/wiki/Overpass_API#Public_Overpass_API_instances and verify
     # with a small curl before a long run (see .env.example).
     overpass_url: str = "https://overpass-api.de/api/interpreter"
+    # Whether this deploy may call Overpass at all. Public Overpass instances tarpit datacenter
+    # egress IPs (Render/Fly/etc.), so on such hosts every call hangs ~60s holding a DB
+    # connection - a few concurrent ones exhaust the pool and the app 502s. Set
+    # OVERPASS_ENABLED=false there: request-path line/discovery work is skipped (USGS terrain
+    # refinement still runs), and OSM data arrives via seeding runs from a machine with clean
+    # Overpass access (see app/seed_region.py).
+    overpass_enabled: bool = True
     rapidapi_key: str = ""  # for TrailAPI (RapidAPI); see app/integrations/trailapi.py
     tomtom_api_key: str = ""  # for "fun drive" routing; see app/integrations/tomtom.py
     # Shared secret gating the destructive / quota-burning ops endpoints (seeding, backfills,

@@ -447,3 +447,35 @@ def test_grid_summary_reports_endpoint(monkeypatch) -> None:
 
     result, client, sleeps = _grid_harness(monkeypatch, behavior)
     assert result["endpoint"] == "fake://overpass"
+
+
+# --- OVERPASS_ENABLED kill switch ------------------------------------------------------------
+
+
+def test_overpass_enabled_defaults_true() -> None:
+    from app.config import Settings
+
+    assert Settings(_env_file=None).overpass_enabled is True
+
+
+def test_disabled_overpass_503s_admin_endpoints(monkeypatch) -> None:
+    """With a valid admin token but OVERPASS_ENABLED=false, the Overpass ops endpoints refuse
+    with a clear 503 (before any Overpass/DB work)."""
+    from fastapi.testclient import TestClient
+
+    from app import security
+    from app.main import app
+    from app.routers import catalog
+
+    monkeypatch.setattr(security, "get_settings", lambda: SimpleNamespace(admin_token="tok"))
+    monkeypatch.setattr(
+        catalog, "get_settings", lambda: SimpleNamespace(overpass_enabled=False)
+    )
+    client = TestClient(app)
+    for path in ("/api/catalog/discover-osm", "/api/catalog/enrich-geometry"):
+        resp = client.post(
+            f"{path}?south=37.0&west=-122.5&north=37.3&east=-122.2",
+            headers={"X-Admin-Token": "tok"},
+        )
+        assert resp.status_code == 503
+        assert "OVERPASS_ENABLED" in resp.json()["detail"]

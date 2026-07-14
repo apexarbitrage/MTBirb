@@ -81,6 +81,16 @@ _AREA_BUFFER_M = 8000
 _MAX_PHOTO_BYTES = 8 * 1024 * 1024
 
 
+def _require_overpass() -> None:
+    """Guard the admin Overpass endpoints on deploys that can't reach Overpass at all."""
+    if not get_settings().overpass_enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="Overpass is disabled on this deploy (OVERPASS_ENABLED=false); "
+            "run seeding from a machine with Overpass access instead",
+        )
+
+
 def _get_catalog_or_404(db: Session, external_id: str) -> CatalogTrail:
     trail = db.scalar(select(CatalogTrail).where(CatalogTrail.external_id == external_id))
     if trail is None:
@@ -140,10 +150,15 @@ async def _enrich_trail_background(external_id: str) -> None:
             trail = db.scalar(select(CatalogTrail).where(CatalogTrail.external_id == external_id))
             if trail is None:
                 return
-            try:
-                await ensure_line(db, trail)
-            except Exception:  # noqa: BLE001 - a line is a nice-to-have
-                logger.warning("background ensure_line failed for %s", external_id, exc_info=True)
+            # Skip Overpass entirely on deploys that can't reach it (tarpitted datacenter IPs):
+            # a hanging call would hold this DB session ~60s, and a few concurrent enrichments
+            # exhaust the pool - the 502 failure mode. Lines come from seeding runs instead;
+            # the USGS terrain refinement below still works from anywhere.
+            if get_settings().overpass_enabled:
+                try:
+                    await ensure_line(db, trail)
+                except Exception:  # noqa: BLE001 - a line is a nice-to-have
+                    logger.warning("background ensure_line failed for %s", external_id, exc_info=True)
             try:
                 await ensure_metrics(db, trail, UsgsElevation())
             except Exception:  # noqa: BLE001 - keep any existing metrics on DEM failure
@@ -177,10 +192,11 @@ async def list_catalog_trails(
 
     # Complement TrailAPI with OSM-discovered trails when this area has few of them - in the
     # background (one bounded Overpass call, never on the hot path), at most once per ~11 km cell
-    # per process. Discovered rows arrive with lines and show on the next load.
+    # per process. Discovered rows arrive with lines and show on the next load. Skipped entirely
+    # when this deploy can't reach Overpass (OVERPASS_ENABLED=false).
     try:
         cell = _osm_cell(lat, lon)
-        if cell not in _osm_cells_attempted:
+        if get_settings().overpass_enabled and cell not in _osm_cells_attempted:
             # Mark before kicking the task so concurrent requests can't race a duplicate call.
             _osm_cells_attempted.add(cell)
             if count_nearby(db, lat, lon, _DISCOVERY_RADIUS_KM, source="osm") < _MIN_OSM_NEARBY:
@@ -610,6 +626,7 @@ async def enrich_geometry(
 ) -> dict:
     """Batch-match OSM lines for catalog trails in a bbox (one Overpass call per trail).
     `force` re-assembles existing lines too (to upgrade older single-way fragments)."""
+    _require_overpass()
     return await enrich_region(db, (south, north), (west, east), max_calls=max_calls, force=force)
 
 
@@ -625,6 +642,7 @@ async def discover_osm(
     """Discover named OSM MTB trails as catalog rows across a bbox: one Overpass call per ~16 km
     cell, 1s pacing, cells with OSM coverage skipped - so re-runs are cheap and resumable. Rows
     arrive with their line geometry set (no later per-trail assembly)."""
+    _require_overpass()
     return await discover_grid(db, (south, north), (west, east), max_calls=max_calls)
 
 
