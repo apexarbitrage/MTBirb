@@ -102,6 +102,13 @@ def _get_catalog_or_404(db: Session, external_id: str) -> CatalogTrail:
 # work when the detail is re-fetched while the first pass is still running.
 _enriching_trails: set[str] = set()
 
+# At most this many background enrichments run at once. Each holds a DB session for the whole
+# USGS lookup (EPQS is one HTTP call per sample point - tens of seconds per trail), and after a
+# full seed EVERY trail qualifies for refinement on first open - unbounded, a browse session
+# pins enough of the 15-connection pool to 502 the whole app. Queued tasks wait here holding
+# nothing; the session opens only after a slot is acquired.
+_enrich_slots = asyncio.Semaphore(2)
+
 # 0.1-degree (~11 km) cells where OSM trail discovery has been attempted this process. An area
 # with no discoverable trails persists nothing, so without this every browse of it would re-hit
 # Overpass - same rationale as trail_routes' _line_attempted. Bound: <=1 Overpass discovery call
@@ -140,33 +147,40 @@ def _needs_enrichment(trail: CatalogTrail) -> bool:
 async def _enrich_trail_background(external_id: str) -> None:
     """Assemble the OSM line + refine USGS elevation off the request path, in its own session
     (ensure_line / ensure_metrics commit their own writes). Fire-and-forget: the detail response
-    already went out, and the client polls for the enriched line/metrics."""
+    already went out, and the client polls for the enriched line/metrics. Concurrency-bounded:
+    the DB session opens only after a `_enrich_slots` slot is acquired, so a burst of trail
+    opens queues here instead of pinning pool connections."""
     if external_id in _enriching_trails:
         return
     _enriching_trails.add(external_id)
     try:
-        db = SessionLocal()
-        try:
-            trail = db.scalar(select(CatalogTrail).where(CatalogTrail.external_id == external_id))
-            if trail is None:
-                return
-            # Skip Overpass entirely on deploys that can't reach it (tarpitted datacenter IPs):
-            # a hanging call would hold this DB session ~60s, and a few concurrent enrichments
-            # exhaust the pool - the 502 failure mode. Lines come from seeding runs instead;
-            # the USGS terrain refinement below still works from anywhere.
-            if get_settings().overpass_enabled:
-                try:
-                    await ensure_line(db, trail)
-                except Exception:  # noqa: BLE001 - a line is a nice-to-have
-                    logger.warning("background ensure_line failed for %s", external_id, exc_info=True)
-            try:
-                await ensure_metrics(db, trail, UsgsElevation())
-            except Exception:  # noqa: BLE001 - keep any existing metrics on DEM failure
-                logger.warning("background ensure_metrics failed for %s", external_id, exc_info=True)
-        finally:
-            db.close()
+        async with _enrich_slots:
+            await _enrich_one(external_id)
     finally:
         _enriching_trails.discard(external_id)
+
+
+async def _enrich_one(external_id: str) -> None:
+    db = SessionLocal()
+    try:
+        trail = db.scalar(select(CatalogTrail).where(CatalogTrail.external_id == external_id))
+        if trail is None:
+            return
+        # Skip Overpass entirely on deploys that can't reach it (tarpitted datacenter IPs):
+        # a hanging call would hold this DB session ~60s, and a few concurrent enrichments
+        # exhaust the pool - the 502 failure mode. Lines come from seeding runs instead;
+        # the USGS terrain refinement below still works from anywhere.
+        if get_settings().overpass_enabled:
+            try:
+                await ensure_line(db, trail)
+            except Exception:  # noqa: BLE001 - a line is a nice-to-have
+                logger.warning("background ensure_line failed for %s", external_id, exc_info=True)
+        try:
+            await ensure_metrics(db, trail, UsgsElevation())
+        except Exception:  # noqa: BLE001 - keep any existing metrics on DEM failure
+            logger.warning("background ensure_metrics failed for %s", external_id, exc_info=True)
+    finally:
+        db.close()
 
 
 @router.get("/trails")

@@ -224,7 +224,11 @@ resampling its OSM line to a fixed number of points and looking up each point's 
 Two tiers fill the same columns: a fast batched **Open-Meteo** pass over many trails
 (`POST /catalog/compute-metrics`, ~90m DEM), then a higher-resolution **USGS 3DEP** refinement
 (~1m) computed per-trail when its detail is opened. `CatalogTrail.elev_source` records which tier
-produced the current values; the USGS pass is a no-op once a trail is already `usgs`. The coarse
+produced the current values; the USGS pass is a no-op once a trail is already `usgs`. The refine
+runs as a background task **bounded to 2 concurrent slots** (`_enrich_slots` in
+`routers/catalog.py` - EPQS is one slow HTTP call per sample point, each task holds a DB session,
+and after a full seed every open qualifies; unbounded, a browse session starves the pool and 502s
+the app) with a 45 s total budget per lookup (`UsgsElevation._TOTAL_BUDGET_S`). The coarse
 tier visibly over-reads climb on flat trails (Open-Meteo said Sawyer Camp gains 646 ft; USGS, 301)
 - that gap is the reason for the refinement.
 
