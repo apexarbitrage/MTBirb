@@ -26,6 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.models import CatalogTrail, WildlifeSighting
 from app.services.catalog_geometry import _haversine_m
+from app.services.trail_catalog import thin_line
 
 # A trail "connects" to the chain if its line comes within this many meters. Wider than
 # stitch_ways' 70 m gap tolerance on purpose: distinct named trails often meet across a junction,
@@ -111,9 +112,12 @@ def connects_to(db: Session, ids_so_far: list[str], candidate_external_id: str) 
     )
 
 
-def lines_for(db: Session, external_ids: list[str]) -> dict[str, list[list[float]]]:
+def lines_for(
+    db: Session, external_ids: list[str], max_points: int | None = None
+) -> dict[str, list[list[float]]]:
     """The OSM lines for many trails in one query: {external_id: [[lon, lat], ...]}. Trails
-    without a line are simply absent."""
+    without a line are simply absent. `max_points` thins each line for display payloads
+    (None = full fidelity - required for GPX export and chain-orientation math)."""
     if not external_ids:
         return {}
     rows = db.execute(
@@ -122,7 +126,10 @@ def lines_for(db: Session, external_ids: list[str]) -> dict[str, list[list[float
             CatalogTrail.line_geom.is_not(None),
         )
     ).all()
-    return {ext_id: json.loads(geojson)["coordinates"] for ext_id, geojson in rows}
+    lines = {ext_id: json.loads(geojson)["coordinates"] for ext_id, geojson in rows}
+    if max_points:
+        lines = {ext_id: thin_line(pts, max_points) for ext_id, pts in lines.items()}
+    return lines
 
 
 def recent_species_near_route(

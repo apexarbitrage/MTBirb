@@ -19,6 +19,7 @@ from datetime import UTC, datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.config import get_settings
 from app.db import get_db
@@ -26,6 +27,7 @@ from app.integrations.weather import WeatherClient
 from app.models import CatalogTrail, TrailRoute
 from app.routers.catalog import (
     _AREA_BUFFER_M,
+    _DISPLAY_LINE_POINTS,
     _enrich_trail_background,
     _enriching_trails,
     _surface_assessment,
@@ -93,6 +95,18 @@ def _combined_line(db: Session, members: list[CatalogTrail]) -> list[list[float]
     return concat_member_lines(ordered)
 
 
+def _candidates_data(db: Session, ids: list[str]) -> tuple[list, list[str], list, dict]:
+    """The candidates endpoint's synchronous DB work, bundled so the async handler can push it
+    to the threadpool in one hop: member rows, the chain-tolerance spatial query, and the
+    display-thinned lines (full OSM density is for GPX/geometry math, not builder payloads)."""
+    members, missing = _member_rows(db, ids)
+    if missing:
+        return members, missing, [], {}
+    candidates = lined_candidates(db, ids)
+    lines = lines_for(db, ids + [c.external_id for c in candidates], max_points=_DISPLAY_LINE_POINTS)
+    return members, missing, candidates, lines
+
+
 @router.get("/candidates")
 async def route_candidates(
     ids: list[str] = Query(..., min_length=1, max_length=_MAX_MEMBERS),
@@ -101,12 +115,11 @@ async def route_candidates(
     """The builder's data source: the chain's members, the lined trails within the chain tolerance
     (tappable candidates), and a bounded background enrichment kick for nearby un-lined trails.
     `enrichingCount` > 0 means lines are still landing - the client polls until it drains."""
-    members, missing = _member_rows(db, ids)
+    # Threadpooled: these are the heaviest spatial queries on any hot path, and this endpoint
+    # fires on every tap in the builder - run inline they'd freeze the event loop (see CLAUDE.md).
+    members, missing, candidates, lines = await run_in_threadpool(_candidates_data, db, ids)
     if missing:
         raise HTTPException(status_code=404, detail=f"unknown trail ids: {', '.join(missing)}")
-
-    candidates = lined_candidates(db, ids)
-    lines = lines_for(db, ids + [c.external_id for c in candidates])
 
     # Hybrid coverage: lined candidates return instantly; the nearest un-lined trails get a
     # bounded background line-assembly so they can join the candidate set on a later poll.
@@ -115,7 +128,7 @@ async def route_candidates(
     # candidates come from the seeded lines alone (enrichingCount 0 = client doesn't poll).
     enriching: set[str] = set()
     if get_settings().overpass_enabled:
-        unlined = unlined_nearby(db, ids)
+        unlined = await run_in_threadpool(unlined_nearby, db, ids)
         targets = pick_enrich_targets(
             [t.external_id for t in unlined], _line_attempted, _enriching_trails
         )
@@ -184,7 +197,9 @@ def get_trail_route(route_id: int, db: Session = Depends(get_db)) -> dict:
     wildlife score, and the species reported near any part of the route."""
     route = _route_or_404(db, route_id)
     members, missing = _member_rows(db, route.trail_external_ids)
-    lines = lines_for(db, [m.external_id for m in members])
+    # Display-thinned: the detail's map and member rows don't need full OSM density (GPX export
+    # rebuilds the combined line from the full-fidelity geometry separately).
+    lines = lines_for(db, [m.external_id for m in members], max_points=_DISPLAY_LINE_POINTS)
     combined = concat_member_lines(
         [lines[m.external_id] for m in members if m.external_id in lines]
     )
@@ -256,7 +271,9 @@ async def trail_route_optimal_time(route_id: int, db: Session = Depends(get_db))
     rep = members[0]
     now = datetime.now(UTC)
 
-    scores = score_catalog_trails(db, [m.id for m in members], buffer_m=_AREA_BUFFER_M)
+    scores = await run_in_threadpool(
+        score_catalog_trails, db, [m.id for m in members], buffer_m=_AREA_BUFFER_M
+    )
     live = [s.get("score", 0) for s in scores.values() if s]
     trail_score = max(live) if live else 0
 

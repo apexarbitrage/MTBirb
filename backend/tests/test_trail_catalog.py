@@ -58,3 +58,23 @@ def test_safe_float() -> None:
     assert _safe_float(None) is None
     assert _safe_float("") is None
     assert _safe_float("abc") is None
+
+
+def test_thin_line_caps_length_and_keeps_endpoints():
+    from app.services.trail_catalog import thin_line
+
+    long = [[float(i), float(i)] for i in range(3000)]
+    thinned = thin_line(long, 400)
+    assert len(thinned) == 400
+    assert thinned[0] == [0.0, 0.0] and thinned[-1] == [2999.0, 2999.0]
+    # Monotonic sample (no reordering/duplication drift).
+    xs = [p[0] for p in thinned]
+    assert xs == sorted(xs)
+
+
+def test_thin_line_leaves_short_lines_alone():
+    from app.services.trail_catalog import thin_line
+
+    short = [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]]
+    assert thin_line(short, 400) == short
+    assert thin_line(short, 0) == short  # degenerate cap -> untouched
