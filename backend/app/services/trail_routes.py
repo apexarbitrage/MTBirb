@@ -139,11 +139,15 @@ def recent_species_near_route(
     lookback_days: int = 14,
     limit: int = 8,
 ) -> list[dict]:
-    """Species recently reported near any part of the route - one union-buffer query over the
-    members' geometries (no per-member merging, so nothing is double-counted). The line-or-point
-    coalesce + ST_Buffer/ST_Intersects pattern mirrors `recent_species_near_catalog`."""
-    buffered = func.ST_Buffer(_chain_geog(member_ids), buffer_m)
+    """Species recently reported near any part of the route - one distance query over the
+    members' collected geometry (no per-member merging, so nothing is double-counted).
+
+    Deliberately ST_DWithin, NOT ST_Buffer + ST_Intersects: geodesically buffering a multi-line
+    collection at 8 km takes the DB minutes of CPU (this endpoint used to hang until the client
+    gave up), while ST_DWithin answers the same "within X m" question straight off the sightings
+    geography index."""
     cutoff = datetime.now(UTC) - timedelta(days=lookback_days)
+    chain = _chain_geog(member_ids)
     rows = db.execute(
         select(
             WildlifeSighting.species_code,
@@ -152,7 +156,7 @@ def recent_species_near_route(
             func.max(WildlifeSighting.observed_at).label("last_observed"),
         )
         .where(WildlifeSighting.observed_at >= cutoff)
-        .where(func.ST_Intersects(func.cast(WildlifeSighting.geom, Geography), buffered))
+        .where(func.ST_DWithin(func.cast(WildlifeSighting.geom, Geography), chain, buffer_m))
         .group_by(WildlifeSighting.species_code, WildlifeSighting.common_name)
         .order_by(func.count().desc(), func.max(WildlifeSighting.observed_at).desc())
         .limit(limit)

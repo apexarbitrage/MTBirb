@@ -132,12 +132,15 @@ def sightings_near_count(db: Session, lat: float, lon: float, radius_km: float) 
 def recent_species_near_catalog(
     db: Session, catalog_id: int, buffer_m: float = 800, lookback_days: int = 14, limit: int = 8
 ) -> list[dict]:
-    """Species recently reported to eBird near a catalog trail (its line if matched, else point)."""
+    """Species recently reported to eBird near a catalog trail (its line if matched, else point).
+
+    ST_DWithin (not ST_Buffer + ST_Intersects): geodesically buffering a long line at several km
+    is expensive DB CPU per call, while ST_DWithin answers the same "within X m" question straight
+    off the sightings geography index (migration 0012)."""
     geom = func.coalesce(CatalogTrail.line_geom, CatalogTrail.geom)
     trail_geog = (
         select(func.cast(geom, Geography)).where(CatalogTrail.id == catalog_id).scalar_subquery()
     )
-    buffered = func.ST_Buffer(trail_geog, buffer_m)
     cutoff = datetime.now(UTC) - timedelta(days=lookback_days)
     rows = db.execute(
         select(
@@ -147,7 +150,7 @@ def recent_species_near_catalog(
             func.max(WildlifeSighting.observed_at).label("last_observed"),
         )
         .where(WildlifeSighting.observed_at >= cutoff)
-        .where(func.ST_Intersects(func.cast(WildlifeSighting.geom, Geography), buffered))
+        .where(func.ST_DWithin(func.cast(WildlifeSighting.geom, Geography), trail_geog, buffer_m))
         .group_by(WildlifeSighting.species_code, WildlifeSighting.common_name)
         .order_by(func.count().desc(), func.max(WildlifeSighting.observed_at).desc())
         .limit(limit)
