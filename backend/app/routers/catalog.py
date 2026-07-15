@@ -78,6 +78,9 @@ _MIN_CACHED = 8
 _MIN_SIGHTINGS = 20
 # Catalog trails are points, so wildlife is reported as an area-level signal at this radius.
 _AREA_BUFFER_M = 8000
+# Display maps get lines thinned to this many points (OSM lines can carry thousands; shipping
+# them all costs seconds of decode+encode per request). GPX export keeps full fidelity.
+_DISPLAY_LINE_POINTS = 400
 # Upper bound on an uploaded trail hero photo (the client downscales first; this is a guard).
 _MAX_PHOTO_BYTES = 8 * 1024 * 1024
 
@@ -379,7 +382,7 @@ async def get_catalog_trail(external_id: str, db: Session = Depends(get_db)) -> 
         "trail": CatalogTrailOut.from_model(
             trail, score, with_factors=True, photo_version=photo_version(photo.updated_at if photo else None)
         ),
-        "linePoints": line_points(db, trail.id),
+        "linePoints": await run_in_threadpool(line_points, db, trail.id, _DISPLAY_LINE_POINTS),
         "enriching": enriching,
     }
 

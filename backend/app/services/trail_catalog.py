@@ -185,11 +185,29 @@ def search_catalog_trails(
     return [(row.CatalogTrail, float(row.distance_mi)) for row in rows]
 
 
-def line_points(db: Session, catalog_id: int) -> list[list[float]] | None:
-    """The catalog trail's OSM line as [[lon, lat], ...], or None if it has no line yet."""
+def thin_line(points: list[list[float]], max_points: int) -> list[list[float]]:
+    """Stride-sample a polyline down to ~max_points, always keeping both endpoints.
+
+    Display maps don't need OSM's full vertex density (a long trail can carry thousands of
+    points); shipping it all bloats every response and burns seconds of JSON encode. GPX export
+    and geometry math keep the full line - this is for display payloads only."""
+    if max_points < 2 or len(points) <= max_points:
+        return points
+    step = (len(points) - 1) / (max_points - 1)
+    thinned = [points[round(i * step)] for i in range(max_points - 1)]
+    thinned.append(points[-1])
+    return thinned
+
+
+def line_points(
+    db: Session, catalog_id: int, max_points: int | None = None
+) -> list[list[float]] | None:
+    """The catalog trail's OSM line as [[lon, lat], ...], or None if it has no line yet.
+    `max_points` thins the line for display payloads (None = full fidelity, e.g. for GPX)."""
     geojson = db.scalar(
         select(func.ST_AsGeoJSON(CatalogTrail.line_geom)).where(CatalogTrail.id == catalog_id)
     )
     if not geojson:
         return None
-    return json.loads(geojson)["coordinates"]
+    points = json.loads(geojson)["coordinates"]
+    return thin_line(points, max_points) if max_points else points
