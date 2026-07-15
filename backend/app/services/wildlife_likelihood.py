@@ -179,16 +179,22 @@ def species_seasonality(
         return {}
     now = ref_date or datetime.now(UTC)
     cutoff = now - timedelta(days=_SEASON_RECENT_EXCLUDE_DAYS)
+    # Aggregate to distinct (species, month) in SQL - phenology only needs the set of months
+    # present, and shipping every historic row (a year+ of backfill across regions, for up to
+    # hundreds of codes) was tens of thousands of rows per call on the DB's memory budget.
+    month_of = func.extract("month", WildlifeSighting.observed_at)
     rows = db.execute(
-        select(WildlifeSighting.species_code, WildlifeSighting.observed_at).where(
+        select(WildlifeSighting.species_code, month_of)
+        .where(
             WildlifeSighting.species_code.in_(species_codes),
             WildlifeSighting.observed_at < cutoff,
         )
+        .group_by(WildlifeSighting.species_code, month_of)
     ).all()
     months: dict[str, set[int]] = {}
-    for code, observed_at in rows:
-        if observed_at is not None:
-            months.setdefault(code, set()).add(observed_at.month)
+    for code, month in rows:
+        if month is not None:
+            months.setdefault(code, set()).add(int(month))
     return {code: _seasonal_factor(m, now.month) for code, m in months.items()}
 
 
