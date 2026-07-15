@@ -333,6 +333,22 @@ route subject travels via location *state* to `OptimalTimeScreen`, not AppState)
 the first member; `FunDriveNavScreen` fetches by id directly rather than gating on the nearby-60
 `byId`, which also fixes navigation from searched trails).
 
+### Sync DB calls in async endpoints block the event loop (the 502-burst gotcha)
+
+The DB layer is synchronous (psycopg), but most routers are `async def` - so a slow query freezes
+the worker's entire event loop: /health (which does no DB work) stops answering, Render's 5 s
+health check fails, and the container is **restarted**, 502ing everything in flight. Metrics look
+fine because it's neither CPU nor memory. At single-region scale every query was fast enough to
+hide this; post-seed the heavy spatial/scoring calls (live `score_catalog_trails`, `species_near`,
+`recent_species_near_*`, `refresh_catalog_scores`, per-species ranking) can take seconds - so in
+async endpoints they are wrapped in `await run_in_threadpool(...)` (starlette), keeping the loop
+free while they run. Sync `def` endpoints (trips, trail-routes CRUD) already run in the threadpool
+- FastAPI does that automatically - and don't need wrapping. If you add a new potentially-slow
+query to an `async def` endpoint, threadpool it; sharing the request's Session across that one
+sequential threadpool hop is fine (no concurrent use). Related: `species_seasonality` filters
+`species_code IN (...) AND observed_at <` on the unbounded sightings table - migration 0015's
+composite index serves it; it was a full seq scan before.
+
 ### Geospatial query gotcha
 
 When querying against a `Trail.geom` or `WildlifeSighting.geom` from another row (e.g.
