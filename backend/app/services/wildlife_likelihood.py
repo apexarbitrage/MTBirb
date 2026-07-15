@@ -216,13 +216,17 @@ def score_catalog_trails(
     cutoff = now - timedelta(days=window_days)
     trail_geog = func.cast(func.coalesce(CatalogTrail.line_geom, CatalogTrail.geom), Geography)
     sight_geog = func.cast(WildlifeSighting.geom, Geography)
+    # Aggregate per (trail, species) in SQL. The score only needs each species' most recent date
+    # and whether it ever arrived via the notable feed - shipping every raw (trail x sighting)
+    # pair instead (60 trails x an 8 km buffer over a multi-region cache = potentially millions
+    # of rows) is what OOM-killed the small managed Postgres and blew app memory.
     rows = db.execute(
         select(
             CatalogTrail.id,
             WildlifeSighting.species_code,
             WildlifeSighting.common_name,
-            WildlifeSighting.observed_at,
-            WildlifeSighting.is_notable,
+            func.max(WildlifeSighting.observed_at).label("last_observed"),
+            func.bool_or(WildlifeSighting.is_notable).label("notable"),
         )
         .join(
             WildlifeSighting,
@@ -233,10 +237,11 @@ def score_catalog_trails(
             isouter=True,
         )
         .where(CatalogTrail.id.in_(trail_ids))
+        .group_by(CatalogTrail.id, WildlifeSighting.species_code, WildlifeSighting.common_name)
     ).all()
 
-    # Per trail, collapse to one entry per species: its most recent date and whether it's ever
-    # arrived via the notable feed nearby.
+    # Collapse to one entry per species. The SQL group is per (species, name); a species whose
+    # cached records carry name variants arrives as multiple rows, merged here like before.
     _floor = datetime.min.replace(tzinfo=UTC)
     per: dict[int, dict[str, dict]] = {tid: {} for tid in trail_ids}
     for tid, code, name, observed_at, notable in rows:
