@@ -10,6 +10,7 @@ import logging
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from starlette.concurrency import run_in_threadpool
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -244,10 +245,10 @@ async def list_catalog_trails(
     # immediately; otherwise fill in any row that's never been scored.
     stale = trails if synced_now else [t for t in trails if t.wildlife_score is None]
     if stale:
-        refresh_catalog_scores(db, stale, buffer_m=_AREA_BUFFER_M)
+        await run_in_threadpool(refresh_catalog_scores, db, stale, buffer_m=_AREA_BUFFER_M)
     # When targeting one species, also score each trail by that species' odds and rank by it. This
     # stays live (it's per-species and can't be precomputed for an arbitrary species).
-    sp = score_species_for_trails(db, ids, species) if species else {}
+    sp = await run_in_threadpool(score_species_for_trails, db, ids, species) if species else {}
     versions = versions_for(db, [t.external_id for t in trails])
     out = [
         CatalogTrailOut.from_model(
@@ -294,7 +295,9 @@ async def list_species_near(
     except Exception:  # noqa: BLE001 - eBird warming is best-effort; serve cached species
         logger.warning("opportunistic eBird sync failed; listing cached species", exc_info=True)
 
-    species = species_near(db, lat, lon, radius_m=radius_km * 1000, limit=limit if not notable_only else 60)
+    species = await run_in_threadpool(
+        species_near, db, lat, lon, radius_m=radius_km * 1000, limit=limit if not notable_only else 60
+    )
     if notable_only:
         species = [s for s in species if s["notable"]][:limit]
     return {"count": len(species), "syncedNow": synced_now, "species": species}
@@ -339,11 +342,13 @@ async def search_trails(
 
     Returns trails from anywhere in the cache — not just those within the current location's
     radius. Only trails already cached are searchable; new regions populate as they're browsed."""
-    results = search_catalog_trails(db, q, lat, lon, limit)
+    results = await run_in_threadpool(search_catalog_trails, db, q, lat, lon, limit)
     if not results:
         return {"query": q, "count": 0, "trails": []}
     trails_only = [t for t, _ in results]
-    scores = score_catalog_trails(db, [t.id for t in trails_only], buffer_m=_AREA_BUFFER_M)
+    scores = await run_in_threadpool(
+        score_catalog_trails, db, [t.id for t in trails_only], buffer_m=_AREA_BUFFER_M
+    )
     versions = versions_for(db, [t.external_id for t in trails_only])
     out = []
     for trail, dist_mi in results:
@@ -366,7 +371,9 @@ async def get_catalog_trail(external_id: str, db: Session = Depends(get_db)) -> 
     enriching = _needs_enrichment(trail)
     if enriching:
         asyncio.create_task(_enrich_trail_background(external_id))
-    score = score_catalog_trails(db, [trail.id], buffer_m=_AREA_BUFFER_M).get(trail.id)
+    score = (
+        await run_in_threadpool(score_catalog_trails, db, [trail.id], buffer_m=_AREA_BUFFER_M)
+    ).get(trail.id)
     photo = get_photo(db, external_id)
     return {
         "trail": CatalogTrailOut.from_model(
@@ -436,7 +443,9 @@ async def catalog_trail_wildlife(
         logger.warning("opportunistic eBird sync failed on wildlife detail", exc_info=True)
     # Catalog trails are point-based, so this is an area-level signal (eBird checklists cluster
     # at hotspots that are rarely right on an arbitrary trailhead), labelled honestly as such.
-    species = recent_species_near_catalog(db, trail.id, buffer_m=_AREA_BUFFER_M, lookback_days=lookback_days)
+    species = await run_in_threadpool(
+        recent_species_near_catalog, db, trail.id, buffer_m=_AREA_BUFFER_M, lookback_days=lookback_days
+    )
     return {"trail": external_id, "syncedNow": synced, "areaRadiusKm": _AREA_BUFFER_M / 1000, "species": species}
 
 
@@ -483,7 +492,9 @@ async def catalog_trail_optimal_time(external_id: str, db: Session = Depends(get
     """
     trail = _get_catalog_or_404(db, external_id)
     now = datetime.now(UTC)
-    score = score_catalog_trails(db, [trail.id], buffer_m=_AREA_BUFFER_M).get(trail.id)
+    score = (
+        await run_in_threadpool(score_catalog_trails, db, [trail.id], buffer_m=_AREA_BUFFER_M)
+    ).get(trail.id)
     trail_score = (score or {}).get("score", 0)
 
     surface = await _surface_assessment(trail.lat, trail.lon, now)
@@ -534,7 +545,9 @@ async def catalog_optimal_now(
         weather_now = None
 
     trails = nearby_trails(db, lat, lon, radius_km, limit)
-    scores = score_catalog_trails(db, [t.id for t in trails], buffer_m=_AREA_BUFFER_M)
+    scores = await run_in_threadpool(
+        score_catalog_trails, db, [t.id for t in trails], buffer_m=_AREA_BUFFER_M
+    )
     ranked = []
     for t in trails:
         factor = per_trail_surface_factor(base_factor, t.sun_exposure, grade_pct(t.avg_up_grade), t.surface)
